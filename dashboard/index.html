@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>QuantStarter</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --paper: #eef2f5;
+    --panel: #ffffff;
+    --ink: #14213d;
+    --muted: #5b6676;
+    --line: #d5dde5;
+    --strategy: #0f7b6c;
+    --hold: #8a93a0;
+    --good: #0f7b6c;
+    --bad: #b4412f;
+    --focus: #2a5bd7;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: 1rem; }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    line-height: 1.5;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+  header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1.5rem; margin-bottom: 1.25rem; }
+  h1 { font-size: 1.35rem; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
+  header p { margin: 0; color: var(--muted); font-size: .9rem; }
+
+  .layout { display: grid; grid-template-columns: 290px 1fr; gap: 1.25rem; align-items: start; }
+  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
+
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem 1.15rem; }
+  .panel + .panel { margin-top: 1.25rem; }
+  h2 { font-size: 1rem; margin: 0 0 .85rem; font-weight: 600; }
+
+  .field { margin-bottom: 1rem; }
+  .field label { display: flex; justify-content: space-between; font-size: .88rem; font-weight: 500; margin-bottom: .3rem; }
+  .field output { font-variant-numeric: tabular-nums; color: var(--strategy); font-weight: 600; }
+  .hint { color: var(--muted); font-size: .8rem; margin: .25rem 0 0; }
+  input[type=range] { width: 100%; accent-color: var(--strategy); }
+  input[type=number], select {
+    width: 100%; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 6px;
+    font: inherit; background: #fff; color: var(--ink);
+  }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px; padding: .65rem 1rem;
+    border: 1px solid var(--strategy); background: var(--strategy); color: #fff; width: 100%;
+  }
+  button.ghost { background: transparent; color: var(--strategy); margin-top: .5rem; }
+  button:disabled { opacity: .6; cursor: progress; }
+  :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+  .verdict { font-size: 1.25rem; font-weight: 600; line-height: 1.35; margin: 0 0 1rem; letter-spacing: -0.01em; }
+  .verdict .good { color: var(--good); }
+  .verdict .bad { color: var(--bad); }
+  .chartbox { position: relative; height: 340px; }
+
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; margin-top: 1.25rem; }
+  .metric { border-top: 3px solid var(--line); padding-top: .55rem; }
+  .metric.good { border-color: var(--good); }
+  .metric.bad { border-color: var(--bad); }
+  .metric .name { font-size: .85rem; color: var(--muted); }
+  .metric .val { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .metric .why { font-size: .8rem; color: var(--muted); margin: .1rem 0 0; }
+
+  .error { background: #fbeae6; border: 1px solid #e9b8ad; color: #7d2a1c; border-radius: 8px; padding: .8rem 1rem; margin-bottom: 1rem; font-size: .9rem; }
+  .error[hidden] { display: none; }
+  .empty { color: var(--muted); padding: 2rem 0; }
+  .calc-out { margin-top: .75rem; font-weight: 600; }
+  footer { margin-top: 1.5rem; color: var(--muted); font-size: .8rem; }
+  @media (prefers-reduced-motion: no-preference) { button { transition: filter .15s; } button:hover:not(:disabled) { filter: brightness(1.08); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>QuantStarter</h1>
+    <p>Test a trading idea on past prices before risking real money.</p>
+  </header>
+
+  <div id="error" class="error" role="alert" hidden></div>
+
+  <div class="layout">
+    <aside>
+      <section class="panel" aria-labelledby="strat-h">
+        <h2 id="strat-h">Moving average crossover</h2>
+
+        <div class="field">
+          <label for="fast">Fast average (candles) <output id="fastOut">20</output></label>
+          <input id="fast" type="range" min="5" max="100" value="20">
+          <p class="hint">Reacts quickly to price changes.</p>
+        </div>
+        <div class="field">
+          <label for="slow">Slow average (candles) <output id="slowOut">50</output></label>
+          <input id="slow" type="range" min="20" max="400" value="50">
+          <p class="hint">Shows the longer trend. Buy when fast rises above slow, sell when it falls below.</p>
+        </div>
+        <div class="field">
+          <label for="fee">Trading fee per trade <output id="feeOut">0.10%</output></label>
+          <input id="fee" type="range" min="0" max="0.5" step="0.01" value="0.10">
+          <p class="hint">Exchanges charge a fee on every buy and sell.</p>
+        </div>
+
+        <button id="run" type="button">Run backtest</button>
+        <button id="slowPreset" type="button" class="ghost">Try slower averages (50 / 200)</button>
+      </section>
+
+      <section class="panel" aria-labelledby="calc-h">
+        <h2 id="calc-h">Position size calculator</h2>
+        <div class="field"><label for="bal">Account balance (USD)</label><input id="bal" type="number" min="1" value="1000"></div>
+        <div class="field"><label for="risk">Risk per trade (%)</label><input id="risk" type="number" min="0.1" max="20" step="0.1" value="1"></div>
+        <div class="field"><label for="entry">Entry price</label><input id="entry" type="number" min="0" value="60000"></div>
+        <div class="field"><label for="stop">Stop-loss price</label><input id="stop" type="number" min="0" value="58000"></div>
+        <button id="calc" type="button">Calculate size</button>
+        <p id="calcOut" class="calc-out" aria-live="polite"></p>
+        <p class="hint">How much to buy so that hitting your stop loses only the percentage you chose.</p>
+      </section>
+    </aside>
+
+    <main>
+      <section class="panel" aria-labelledby="res-h">
+        <h2 id="res-h">Result</h2>
+        <div id="empty" class="empty">Choose your settings and press Run backtest.</div>
+        <div id="result" hidden>
+          <p id="verdict" class="verdict"></p>
+          <div class="chartbox"><canvas id="chart" aria-label="Growth of 1 unit: strategy versus buy and hold" role="img"></canvas></div>
+          <div id="metrics" class="metrics"></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <footer>Simulation on historical data only. Past results do not predict future results. This is not financial advice.</footer>
+</div>
+
+<script>
+  // Change this if your API runs somewhere else.
+  const API = "http://127.0.0.1:8000";
+
+  const $ = (id) => document.getElementById(id);
+  const pct = (x) => (x * 100).toFixed(2) + "%";
+  let chart = null;
+
+  // keep the slider labels in sync
+  const sync = () => {
+    $("fastOut").textContent = $("fast").value;
+    $("slowOut").textContent = $("slow").value;
+    $("feeOut").textContent = Number($("fee").value).toFixed(2) + "%";
+  };
+  ["fast", "slow", "fee"].forEach((id) => $(id).addEventListener("input", sync));
+
+  function showError(msg) {
+    const box = $("error");
+    box.textContent = msg;
+    box.hidden = !msg;
+  }
+
+  async function getJSON(path, params) {
+    const url = API + path + "?" + new URLSearchParams(params);
+    let res;
+    try {
+      res = await fetch(url);
+    } catch (e) {
+      throw new Error("Can't reach the API at " + API + ". Start it with: python -m uvicorn api.main:app --reload");
+    }
+    if (!res.ok) {
+      let detail = res.statusText;
+      try { detail = (await res.json()).detail || detail; } catch (_) {}
+      throw new Error(detail);
+    }
+    return res.json();
+  }
+
+  function metricCard(name, value, why, tone) {
+    return `<div class="metric ${tone || ""}"><div class="name">${name}</div><div class="val">${value}</div><p class="why">${why}</p></div>`;
+  }
+
+  function render(data) {
+    const m = data.metrics;
+    const better = m.total_return > m.buy_hold_return;
+    const verb = (x) => (x >= 0 ? "gained" : "lost");
+
+    $("verdict").innerHTML =
+      `The strategy <span class="${m.total_return >= 0 ? "good" : "bad"}">${verb(m.total_return)} ${pct(Math.abs(m.total_return))}</span>, ` +
+      `while simply holding ${verb(m.buy_hold_return)} ${pct(Math.abs(m.buy_hold_return))}. ` +
+      (better ? "It beat holding." : "Holding did better.");
+
+    $("metrics").innerHTML = [
+      metricCard("Max drawdown", pct(m.max_drawdown),
+        `Biggest drop from a peak. Holding: ${pct(m.buy_hold_max_drawdown)}.`,
+        m.max_drawdown > m.buy_hold_max_drawdown ? "good" : "bad"),
+      metricCard("Sharpe ratio", m.sharpe.toFixed(2),
+        "Return per unit of risk. Above 1 is decent, below 0 means losing money.",
+        m.sharpe >= 1 ? "good" : m.sharpe < 0 ? "bad" : ""),
+      metricCard("Sortino ratio", m.sortino.toFixed(2),
+        "Like Sharpe, but only counts downside swings as risk.",
+        m.sortino >= 1 ? "good" : m.sortino < 0 ? "bad" : ""),
+      metricCard("Win rate", pct(m.win_rate),
+        "Share of trades that made money. Low is fine if wins are bigger than losses.", ""),
+      metricCard("Trades", data.trades.toLocaleString(),
+        `Each one pays the ${(data.params.fee * 100).toFixed(2)}% fee. Many trades means high costs.`, ""),
+      metricCard("Candles tested", data.candles.toLocaleString(),
+        "How many price bars the test covered.", ""),
+    ].join("");
+
+    const labels = data.chart.time.map((t) => t.slice(0, 10));
+    const cfg = {
+      type: "line",
+      data: {
+        labels,
+        datasets: [
+          { label: "Strategy", data: data.chart.equity, borderColor: "#0f7b6c", borderWidth: 2.5, pointRadius: 0, tension: 0 },
+          { label: "Buy and hold", data: data.chart.buy_hold, borderColor: "#8a93a0", borderWidth: 2, pointRadius: 0, borderDash: [6, 4], tension: 0 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { position: "top", align: "start" },
+          tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y.toFixed(3)}x` } },
+        },
+        scales: {
+          x: { ticks: { maxTicksLimit: 8, maxRotation: 0 }, grid: { display: false } },
+          y: { title: { display: true, text: "Growth of 1.00 invested" }, grid: { color: "#e6ebf0" } },
+        },
+      },
+    };
+    if (chart) chart.destroy();
+    chart = new Chart($("chart"), cfg);
+
+    $("empty").hidden = true;
+    $("result").hidden = false;
+  }
+
+  async function run() {
+    showError("");
+    const fast = Number($("fast").value);
+    const slow = Number($("slow").value);
+    if (fast >= slow) {
+      showError("The fast average must be smaller than the slow average. Lower fast or raise slow.");
+      return;
+    }
+    const btn = $("run");
+    btn.disabled = true;
+    btn.textContent = "Running...";
+    try {
+      const data = await getJSON("/backtest", { fast, slow, fee: Number($("fee").value) / 100 });
+      render(data);
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "Run backtest";
+    }
+  }
+
+  async function calc() {
+    showError("");
+    try {
+      const data = await getJSON("/position-size", {
+        balance: $("bal").value,
+        risk_pct: Number($("risk").value) / 100,
+        entry: $("entry").value,
+        stop: $("stop").value,
+      });
+      $("calcOut").textContent = `Buy about ${data.units.toFixed(6)} units.`;
+    } catch (e) {
+      showError("Position size: " + e.message);
+    }
+  }
+
+  $("run").addEventListener("click", run);
+  $("calc").addEventListener("click", calc);
+  $("slowPreset").addEventListener("click", () => {
+    $("fast").value = 50;
+    $("slow").value = 200;
+    sync();
+    run();
+  });
+  sync();
+</script>
+</body>
+</html>

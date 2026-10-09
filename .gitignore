@@ -1,0 +1,22 @@
+# secrets
+.env
+*.env
+!.env.example
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# node (if you add npm packages later)
+node_modules/
+
+# editor / OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+# local database dumps and data files
+*.sql.bak
+*.sqlite

@@ -1,0 +1,8 @@
+ccxt
+mysql-connector-python
+python-dotenv
+pandas
+numpy
+yfinance
+fastapi
+uvicorn
