@@ -10,74 +10,54 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 <style>
   :root {
-    --paper: #eef2f5;
-    --panel: #ffffff;
-    --ink: #14213d;
-    --muted: #5b6676;
-    --line: #d5dde5;
-    --strategy: #0f7b6c;
-    --hold: #8a93a0;
-    --good: #0f7b6c;
-    --bad: #b4412f;
-    --focus: #2a5bd7;
+    --paper: #eef2f5; --panel: #ffffff; --ink: #14213d; --muted: #5b6676; --line: #d5dde5;
+    --strategy: #0f7b6c; --hold: #8a93a0; --good: #0f7b6c; --bad: #b4412f; --focus: #2a5bd7;
   }
   * { box-sizing: border-box; }
-  html { scroll-padding-top: 1rem; }
-  body {
-    margin: 0;
-    background: var(--paper);
-    color: var(--ink);
-    font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
-    line-height: 1.5;
-  }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
+  body { margin: 0; background: var(--paper); color: var(--ink);
+    font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif; line-height: 1.5; }
+  .wrap { max-width: 1120px; margin: 0 auto; padding: 1.5rem 1.25rem 3rem; }
   header { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: .5rem 1.5rem; margin-bottom: 1.25rem; }
   h1 { font-size: 1.35rem; margin: 0; font-weight: 700; letter-spacing: -0.01em; }
   header p { margin: 0; color: var(--muted); font-size: .9rem; }
-
-  .layout { display: grid; grid-template-columns: 290px 1fr; gap: 1.25rem; align-items: start; }
-  @media (max-width: 820px) { .layout { grid-template-columns: 1fr; } }
-
+  .layout { display: grid; grid-template-columns: 300px 1fr; gap: 1.25rem; align-items: start; }
+  @media (max-width: 860px) { .layout { grid-template-columns: 1fr; } }
   .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 1.1rem 1.15rem; }
   .panel + .panel { margin-top: 1.25rem; }
   h2 { font-size: 1rem; margin: 0 0 .85rem; font-weight: 600; }
-
+  h3 { font-size: .95rem; margin: 1.25rem 0 .5rem; font-weight: 600; }
   .field { margin-bottom: 1rem; }
-  .field label { display: flex; justify-content: space-between; font-size: .88rem; font-weight: 500; margin-bottom: .3rem; }
+  .field label { display: flex; justify-content: space-between; gap: .5rem; font-size: .88rem; font-weight: 500; margin-bottom: .3rem; }
   .field output { font-variant-numeric: tabular-nums; color: var(--strategy); font-weight: 600; }
   .hint { color: var(--muted); font-size: .8rem; margin: .25rem 0 0; }
   input[type=range] { width: 100%; accent-color: var(--strategy); }
-  input[type=number], select {
-    width: 100%; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 6px;
-    font: inherit; background: #fff; color: var(--ink);
-  }
-  button {
-    font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px; padding: .65rem 1rem;
-    border: 1px solid var(--strategy); background: var(--strategy); color: #fff; width: 100%;
-  }
+  input[type=number], select { width: 100%; padding: .5rem .6rem; border: 1px solid var(--line); border-radius: 6px; font: inherit; background: #fff; color: var(--ink); }
+  button { font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px; padding: .65rem 1rem;
+    border: 1px solid var(--strategy); background: var(--strategy); color: #fff; width: 100%; }
   button.ghost { background: transparent; color: var(--strategy); margin-top: .5rem; }
+  button.small { width: auto; padding: .45rem .8rem; font-size: .88rem; }
   button:disabled { opacity: .6; cursor: progress; }
   :focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
-
-  .verdict { font-size: 1.25rem; font-weight: 600; line-height: 1.35; margin: 0 0 1rem; letter-spacing: -0.01em; }
-  .verdict .good { color: var(--good); }
-  .verdict .bad { color: var(--bad); }
+  .verdict { font-size: 1.2rem; font-weight: 600; line-height: 1.35; margin: 0 0 1rem; letter-spacing: -0.01em; }
+  .good { color: var(--good); } .bad { color: var(--bad); }
   .chartbox { position: relative; height: 340px; }
-
-  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; margin-top: 1.25rem; }
-  .metric { border-top: 3px solid var(--line); padding-top: .55rem; }
-  .metric.good { border-color: var(--good); }
-  .metric.bad { border-color: var(--bad); }
-  .metric .name { font-size: .85rem; color: var(--muted); }
-  .metric .val { font-size: 1.45rem; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .metric .why { font-size: .8rem; color: var(--muted); margin: .1rem 0 0; }
-
+  .tablewrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: .9rem; font-variant-numeric: tabular-nums; }
+  th, td { text-align: right; padding: .45rem .6rem; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; white-space: normal; }
+  th small { display: block; font-weight: 400; color: var(--muted); }
+  td.good, td.bad { font-weight: 600; }
+  details { margin-top: 1rem; font-size: .88rem; color: var(--muted); }
+  details summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+  details dt { font-weight: 600; color: var(--ink); margin-top: .5rem; }
+  details dd { margin: 0; }
+  .lesson { background: #f3f6f9; border-left: 4px solid var(--strategy); padding: .7rem .9rem; border-radius: 0 6px 6px 0; margin: .9rem 0; }
+  .lesson.warn { border-color: var(--bad); }
   .error { background: #fbeae6; border: 1px solid #e9b8ad; color: #7d2a1c; border-radius: 8px; padding: .8rem 1rem; margin-bottom: 1rem; font-size: .9rem; }
-  .error[hidden] { display: none; }
-  .empty { color: var(--muted); padding: 2rem 0; }
+  .error[hidden], [hidden] { display: none; }
+  .empty { color: var(--muted); padding: 1.5rem 0; }
   .calc-out { margin-top: .75rem; font-weight: 600; }
   footer { margin-top: 1.5rem; color: var(--muted); font-size: .8rem; }
-  @media (prefers-reduced-motion: no-preference) { button { transition: filter .15s; } button:hover:not(:disabled) { filter: brightness(1.08); } }
 </style>
 </head>
 <body>
@@ -92,26 +72,34 @@
   <div class="layout">
     <aside>
       <section class="panel" aria-labelledby="strat-h">
-        <h2 id="strat-h">Moving average crossover</h2>
+        <h2 id="strat-h">Strategy</h2>
+        <div class="field">
+          <label for="strategy">Choose a strategy</label>
+          <select id="strategy"></select>
+          <p id="strategyDesc" class="hint"></p>
+        </div>
 
-        <div class="field">
-          <label for="fast">Fast average (candles) <output id="fastOut">20</output></label>
-          <input id="fast" type="range" min="5" max="100" value="20">
-          <p class="hint">Reacts quickly to price changes.</p>
-        </div>
-        <div class="field">
-          <label for="slow">Slow average (candles) <output id="slowOut">50</output></label>
-          <input id="slow" type="range" min="20" max="400" value="50">
-          <p class="hint">Shows the longer trend. Buy when fast rises above slow, sell when it falls below.</p>
-        </div>
+        <div id="paramFields"></div>
+
         <div class="field">
           <label for="fee">Trading fee per trade <output id="feeOut">0.10%</output></label>
           <input id="fee" type="range" min="0" max="0.5" step="0.01" value="0.10">
           <p class="hint">Exchanges charge a fee on every buy and sell.</p>
         </div>
 
+        <div class="field">
+          <label for="holdout">Keep newest data as an unseen test</label>
+          <select id="holdout">
+            <option value="0">Off (use all data)</option>
+            <option value="0.2">Last 20%</option>
+            <option value="0.3" selected>Last 30%</option>
+            <option value="0.4">Last 40%</option>
+          </select>
+          <p class="hint">Shows how the idea does on prices it was not set up on.</p>
+        </div>
+
         <button id="run" type="button">Run backtest</button>
-        <button id="slowPreset" type="button" class="ghost">Try slower averages (50 / 200)</button>
+        <button id="opt" type="button" class="ghost">Find best settings</button>
       </section>
 
       <section class="panel" aria-labelledby="calc-h">
@@ -129,12 +117,29 @@
     <main>
       <section class="panel" aria-labelledby="res-h">
         <h2 id="res-h">Result</h2>
-        <div id="empty" class="empty">Choose your settings and press Run backtest.</div>
+        <div id="empty" class="empty">Choose a strategy and press Run backtest.</div>
         <div id="result" hidden>
           <p id="verdict" class="verdict"></p>
-          <div class="chartbox"><canvas id="chart" aria-label="Growth of 1 unit: strategy versus buy and hold" role="img"></canvas></div>
-          <div id="metrics" class="metrics"></div>
+          <div class="chartbox"><canvas id="chart" role="img" aria-label="Growth of 1 unit invested: strategy versus buy and hold"></canvas></div>
+          <h3>Numbers</h3>
+          <div id="tableBox" class="tablewrap"></div>
+          <details>
+            <summary>What do these mean?</summary>
+            <dl>
+              <dt>Strategy vs buy and hold return</dt><dd>Did the idea beat simply holding the coin?</dd>
+              <dt>Max drawdown</dt><dd>The worst fall from a peak. Could you sit through it?</dd>
+              <dt>Sharpe ratio</dt><dd>Return per unit of risk. Above 1 is decent, below 0 means it lost money.</dd>
+              <dt>Trades</dt><dd>Every trade pays the fee. Very few trades means the result may be luck.</dd>
+              <dt>Win rate</dt><dd>Share of trades that made money. Low is fine if the wins are much bigger than the losses.</dd>
+              <dt>Training vs unseen test</dt><dd>If the idea only works on the training part, it probably fit past noise (overfitting).</dd>
+            </dl>
+          </details>
         </div>
+      </section>
+
+      <section id="optPanel" class="panel" aria-labelledby="opt-h" hidden>
+        <h2 id="opt-h">Best settings, checked on unseen data</h2>
+        <div id="optBox"></div>
       </section>
     </main>
   </div>
@@ -148,15 +153,9 @@
 
   const $ = (id) => document.getElementById(id);
   const pct = (x) => (x * 100).toFixed(2) + "%";
+  let specs = {};
   let chart = null;
-
-  // keep the slider labels in sync
-  const sync = () => {
-    $("fastOut").textContent = $("fast").value;
-    $("slowOut").textContent = $("slow").value;
-    $("feeOut").textContent = Number($("fee").value).toFixed(2) + "%";
-  };
-  ["fast", "slow", "fee"].forEach((id) => $(id).addEventListener("input", sync));
+  let lastBest = null;
 
   function showError(msg) {
     const box = $("error");
@@ -164,7 +163,7 @@
     box.hidden = !msg;
   }
 
-  async function getJSON(path, params) {
+  async function getJSON(path, params = {}) {
     const url = API + path + "?" + new URLSearchParams(params);
     let res;
     try {
@@ -180,41 +179,97 @@
     return res.json();
   }
 
-  function metricCard(name, value, why, tone) {
-    return `<div class="metric ${tone || ""}"><div class="name">${name}</div><div class="val">${value}</div><p class="why">${why}</p></div>`;
+  // ---------- controls ----------
+  function buildParams() {
+    const spec = specs[$("strategy").value];
+    $("strategyDesc").textContent = spec.description;
+    $("paramFields").innerHTML = spec.params.map((p) =>
+      `<div class="field">
+         <label for="p_${p.name}">${p.label} <output id="o_${p.name}">${p.default}</output></label>
+         <input id="p_${p.name}" type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${p.default}">
+         <p class="hint">${p.hint}</p>
+       </div>`).join("");
+    spec.params.forEach((p) => {
+      $("p_" + p.name).addEventListener("input", () => { $("o_" + p.name).textContent = $("p_" + p.name).value; });
+    });
   }
 
+  function currentParams() {
+    const out = {};
+    specs[$("strategy").value].params.forEach((p) => { out[p.name] = Number($("p_" + p.name).value); });
+    return out;
+  }
+
+  function setParams(values) {
+    Object.entries(values).forEach(([k, v]) => {
+      const el = $("p_" + k);
+      if (el) { el.value = v; $("o_" + k).textContent = v; }
+    });
+  }
+
+  $("fee").addEventListener("input", () => { $("feeOut").textContent = Number($("fee").value).toFixed(2) + "%"; });
+  $("strategy").addEventListener("change", buildParams);
+
+  // ---------- result rendering ----------
+  const toneRet = (x) => (x >= 0 ? "good" : "bad");
+  const ROWS = [
+    ["Strategy return", (m) => pct(m.total_return), (m) => toneRet(m.total_return)],
+    ["Buy and hold return", (m) => pct(m.buy_hold_return), () => ""],
+    ["Strategy max drawdown", (m) => pct(m.max_drawdown), () => ""],
+    ["Buy and hold max drawdown", (m) => pct(m.buy_hold_max_drawdown), () => ""],
+    ["Sharpe ratio", (m) => m.sharpe.toFixed(2), (m) => (m.sharpe >= 1 ? "good" : m.sharpe < 0 ? "bad" : "")],
+    ["Trades", (m) => m.trades.toLocaleString(), () => ""],
+    ["Win rate", (m) => pct(m.win_rate), () => ""],
+  ];
+
+  function periodTable(periods) {
+    const head = periods.map((p) => `<th>${p.name}<small>${p.start} to ${p.end}</small></th>`).join("");
+    const body = ROWS.map(([label, fmt, tone]) =>
+      `<tr><td>${label}</td>${periods.map((p) => `<td class="${tone(p.metrics)}">${fmt(p.metrics)}</td>`).join("")}</tr>`
+    ).join("");
+    return `<table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  }
+
+  const splitLine = {
+    id: "splitLine",
+    afterDraw(c) {
+      const idx = c.options.plugins.splitLine && c.options.plugins.splitLine.index;
+      if (idx == null || idx < 0) return;
+      const x = c.scales.x.getPixelForValue(idx);
+      const { top, bottom } = c.chartArea;
+      const ctx = c.ctx;
+      ctx.save();
+      ctx.strokeStyle = "#b4412f";
+      ctx.fillStyle = "#b4412f";
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.font = "12px sans-serif";
+      ctx.fillText("Unseen test period", x + 6, top + 14);
+      ctx.restore();
+    },
+  };
+
   function render(data) {
-    const m = data.metrics;
-    const better = m.total_return > m.buy_hold_return;
+    const last = data.periods[data.periods.length - 1];
+    const m = last.metrics;
+    const where = data.periods.length > 1 ? "On the unseen test period" : "Over the whole period";
     const verb = (x) => (x >= 0 ? "gained" : "lost");
+    const better = m.total_return > m.buy_hold_return;
 
     $("verdict").innerHTML =
-      `The strategy <span class="${m.total_return >= 0 ? "good" : "bad"}">${verb(m.total_return)} ${pct(Math.abs(m.total_return))}</span>, ` +
-      `while simply holding ${verb(m.buy_hold_return)} ${pct(Math.abs(m.buy_hold_return))}. ` +
+      `${where}, the strategy <span class="${toneRet(m.total_return)}">${verb(m.total_return)} ${pct(Math.abs(m.total_return))}</span>, ` +
+      `while holding ${verb(m.buy_hold_return)} ${pct(Math.abs(m.buy_hold_return))}. ` +
       (better ? "It beat holding." : "Holding did better.");
 
-    $("metrics").innerHTML = [
-      metricCard("Max drawdown", pct(m.max_drawdown),
-        `Biggest drop from a peak. Holding: ${pct(m.buy_hold_max_drawdown)}.`,
-        m.max_drawdown > m.buy_hold_max_drawdown ? "good" : "bad"),
-      metricCard("Sharpe ratio", m.sharpe.toFixed(2),
-        "Return per unit of risk. Above 1 is decent, below 0 means losing money.",
-        m.sharpe >= 1 ? "good" : m.sharpe < 0 ? "bad" : ""),
-      metricCard("Sortino ratio", m.sortino.toFixed(2),
-        "Like Sharpe, but only counts downside swings as risk.",
-        m.sortino >= 1 ? "good" : m.sortino < 0 ? "bad" : ""),
-      metricCard("Win rate", pct(m.win_rate),
-        "Share of trades that made money. Low is fine if wins are bigger than losses.", ""),
-      metricCard("Trades", data.trades.toLocaleString(),
-        `Each one pays the ${(data.params.fee * 100).toFixed(2)}% fee. Many trades means high costs.`, ""),
-      metricCard("Candles tested", data.candles.toLocaleString(),
-        "How many price bars the test covered.", ""),
-    ].join("");
+    $("tableBox").innerHTML = periodTable(data.periods);
 
     const labels = data.chart.time.map((t) => t.slice(0, 10));
-    const cfg = {
+    const splitIdx = data.split_time ? data.chart.time.findIndex((t) => t >= data.split_time) : -1;
+    if (chart) chart.destroy();
+    chart = new Chart($("chart"), {
       type: "line",
+      plugins: [splitLine],
       data: {
         labels,
         datasets: [
@@ -229,39 +284,96 @@
         plugins: {
           legend: { position: "top", align: "start" },
           tooltip: { callbacks: { label: (c) => `${c.dataset.label}: ${c.parsed.y.toFixed(3)}x` } },
+          splitLine: { index: splitIdx },
         },
         scales: {
           x: { ticks: { maxTicksLimit: 8, maxRotation: 0 }, grid: { display: false } },
           y: { title: { display: true, text: "Growth of 1.00 invested" }, grid: { color: "#e6ebf0" } },
         },
       },
-    };
-    if (chart) chart.destroy();
-    chart = new Chart($("chart"), cfg);
+    });
 
     $("empty").hidden = true;
     $("result").hidden = false;
   }
 
+  // ---------- optimizer rendering ----------
+  const fmtParams = (p) => Object.entries(p).map(([k, v]) => `${k} ${v}`).join(", ");
+
+  function renderOpt(d) {
+    const b = d.best;
+    lastBest = b.params;
+    const tr = b.train.sharpe, te = b.test.sharpe;
+    let lesson, warn = false;
+    if (tr <= 0) {
+      lesson = "Even the best setting lost money on the training data. This idea may simply not work on this asset and period.";
+    } else if (te < 0) {
+      lesson = "Classic overfitting: the setting that looked best on the past lost money on data it had not seen. Picking the winner from many tries mostly finds what fit old noise.";
+      warn = true;
+    } else if (te < tr * 0.5) {
+      lesson = "The unseen result is much weaker than the training result. Expect real-world results to be closer to the unseen number than to the training one.";
+      warn = true;
+    } else {
+      lesson = "This setting held up better on unseen data, which is encouraging. One test period is still a small sample, so check other periods and higher fees before trusting it.";
+    }
+
+    const rows = d.top.map((c, i) =>
+      `<tr><td>${i + 1}. ${fmtParams(c.params)}</td>
+         <td>${c.train.sharpe.toFixed(2)}</td>
+         <td class="${c.test.sharpe >= 0 ? "good" : "bad"}">${c.test.sharpe.toFixed(2)}</td>
+         <td class="${toneRet(c.test.total_return)}">${pct(c.test.total_return)}</td></tr>`).join("");
+
+    $("optBox").innerHTML =
+      `<p>Tried <strong>${d.tested}</strong> settings using only the first ${Math.round((1 - d.holdout) * 100)}% of the data, then checked the winners on the last ${Math.round(d.holdout * 100)}%.</p>
+       <p>Best on training: <strong>${fmtParams(b.params)}</strong> (Sharpe <strong>${tr.toFixed(2)}</strong>).
+          On unseen data: Sharpe <strong class="${te >= 0 ? "good" : "bad"}">${te.toFixed(2)}</strong>,
+          return <strong class="${toneRet(b.test.total_return)}">${pct(b.test.total_return)}</strong>.</p>
+       <div class="lesson ${warn ? "warn" : ""}">${lesson}</div>
+       <div class="tablewrap"><table>
+         <thead><tr><th>Top 5 on training</th><th>Train Sharpe</th><th>Test Sharpe</th><th>Test return</th></tr></thead>
+         <tbody>${rows}</tbody></table></div>
+       <p style="margin-top:.9rem"><button id="apply" type="button" class="small">Use the best settings above</button></p>`;
+    $("apply").addEventListener("click", () => { setParams(lastBest); run(); });
+    $("optPanel").hidden = false;
+  }
+
+  // ---------- actions ----------
+  function query() {
+    return {
+      strategy: $("strategy").value,
+      ...currentParams(),
+      fee: Number($("fee").value) / 100,
+      holdout: $("holdout").value,
+    };
+  }
+
   async function run() {
     showError("");
-    const fast = Number($("fast").value);
-    const slow = Number($("slow").value);
-    if (fast >= slow) {
-      showError("The fast average must be smaller than the slow average. Lower fast or raise slow.");
-      return;
-    }
     const btn = $("run");
-    btn.disabled = true;
-    btn.textContent = "Running...";
+    btn.disabled = true; btn.textContent = "Running...";
     try {
-      const data = await getJSON("/backtest", { fast, slow, fee: Number($("fee").value) / 100 });
-      render(data);
+      render(await getJSON("/backtest", query()));
     } catch (e) {
       showError(e.message);
     } finally {
-      btn.disabled = false;
-      btn.textContent = "Run backtest";
+      btn.disabled = false; btn.textContent = "Run backtest";
+    }
+  }
+
+  async function optimize() {
+    showError("");
+    const btn = $("opt");
+    btn.disabled = true; btn.textContent = "Searching...";
+    try {
+      renderOpt(await getJSON("/optimize", {
+        strategy: $("strategy").value,
+        fee: Number($("fee").value) / 100,
+        holdout: Number($("holdout").value) || 0.3,
+      }));
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = "Find best settings";
     }
   }
 
@@ -280,15 +392,20 @@
     }
   }
 
+  async function init() {
+    try {
+      specs = await getJSON("/strategies");
+      $("strategy").innerHTML = Object.entries(specs).map(([k, s]) => `<option value="${k}">${s.label}</option>`).join("");
+      buildParams();
+    } catch (e) {
+      showError(e.message);
+    }
+  }
+
   $("run").addEventListener("click", run);
+  $("opt").addEventListener("click", optimize);
   $("calc").addEventListener("click", calc);
-  $("slowPreset").addEventListener("click", () => {
-    $("fast").value = 50;
-    $("slow").value = 200;
-    sync();
-    run();
-  });
-  sync();
+  init();
 </script>
 </body>
 </html>
