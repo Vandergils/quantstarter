@@ -12,6 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "engine"))
 from backtest import load_candles  # noqa: E402
 from metrics import position_size, summary  # noqa: E402
 from strategies import STRATEGIES, backtest, slice_result  # noqa: E402
+from walkforward import run_walk_forward  # noqa: E402
 
 app = FastAPI(title="QuantStarter API")
 
@@ -190,6 +191,25 @@ def optimize(
         "top": combos[:5],
         "disclaimer": DISCLAIMER,
     }
+
+
+@app.get("/walkforward")
+def walkforward(
+    strategy: str = "sma",
+    fee: float = Query(0.001, ge=0, le=0.05),
+    folds: int = Query(5, ge=3, le=8, description="How many train/test windows to slide through the data."),
+    exchange: str = "yahoo",
+    symbol: str = "BTC/USD",
+    timeframe: str = "1h",
+):
+    """Repeat 'pick the best setting on training data, then test it on unseen data' over several windows."""
+    get_spec(strategy)
+    data = get_data(exchange, symbol, timeframe)
+    try:
+        result = run_walk_forward(data, strategy, fee, folds)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    return {**result, "disclaimer": DISCLAIMER}
 
 
 @app.get("/position-size")

@@ -100,6 +100,18 @@
 
         <button id="run" type="button">Run backtest</button>
         <button id="opt" type="button" class="ghost">Find best settings</button>
+
+        <div class="field" style="margin-top:1rem">
+          <label for="folds">Walk-forward windows</label>
+          <select id="folds">
+            <option value="3">3</option>
+            <option value="4">4</option>
+            <option value="5" selected>5</option>
+            <option value="6">6</option>
+          </select>
+          <p class="hint">Repeats the train and test routine over several time windows.</p>
+        </div>
+        <button id="wf" type="button" class="ghost" style="margin-top:0">Run walk-forward test</button>
       </section>
 
       <section class="panel" aria-labelledby="calc-h">
@@ -132,6 +144,7 @@
               <dt>Trades</dt><dd>Every trade pays the fee. Very few trades means the result may be luck.</dd>
               <dt>Win rate</dt><dd>Share of trades that made money. Low is fine if the wins are much bigger than the losses.</dd>
               <dt>Training vs unseen test</dt><dd>If the idea only works on the training part, it probably fit past noise (overfitting).</dd>
+              <dt>Walk-forward test</dt><dd>Repeats the train-then-test routine over several time windows. A good idea should win in most of them, not just once.</dd>
             </dl>
           </details>
         </div>
@@ -140,6 +153,11 @@
       <section id="optPanel" class="panel" aria-labelledby="opt-h" hidden>
         <h2 id="opt-h">Best settings, checked on unseen data</h2>
         <div id="optBox"></div>
+      </section>
+
+      <section id="wfPanel" class="panel" aria-labelledby="wf-h" hidden>
+        <h2 id="wf-h">Walk-forward test</h2>
+        <div id="wfBox"></div>
       </section>
     </main>
   </div>
@@ -337,6 +355,115 @@
     $("optPanel").hidden = false;
   }
 
+
+  // ---------- walk-forward ----------
+  let wfChart = null;
+  const foldLines = {
+    id: "foldLines",
+    afterDraw(c) {
+      const idxs = c.options.plugins.foldLines && c.options.plugins.foldLines.indexes;
+      if (!idxs) return;
+      const { top, bottom } = c.chartArea;
+      const ctx = c.ctx;
+      ctx.save();
+      ctx.strokeStyle = "#9aa5b4";
+      ctx.setLineDash([3, 4]);
+      idxs.forEach((i) => {
+        if (i < 0) return;
+        const x = c.scales.x.getPixelForValue(i);
+        ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+      });
+      ctx.restore();
+    },
+  };
+
+  function renderWF(d) {
+    const c = d.consistency, st = d.stitched.metrics;
+    const n = c.folds;
+    const verb = (x) => (x >= 0 ? "gained" : "lost");
+
+    let lesson, warn = false;
+    if (c.profitable <= Math.floor(n / 3) || st.total_return < 0) {
+      lesson = "The strategy lost money in most unseen windows. There is no evidence here that this idea works on this data.";
+      warn = true;
+    } else if (c.beat_hold / n >= 0.6 && st.total_return > st.buy_hold_return) {
+      lesson = "It beat simply holding in most windows, which is a good sign. Still check higher fees and other periods before trusting it.";
+    } else {
+      lesson = "Mixed result: it made money in some windows but did not clearly beat holding. A strategy that wins only sometimes is hard to rely on.";
+    }
+    const stability = c.distinct_settings >= Math.ceil(n * 0.6)
+      ? `The best setting changed in ${c.distinct_settings} of ${n} windows. When the "best" setting keeps changing, picking it is mostly chasing noise.`
+      : `The best setting was fairly steady (${c.distinct_settings} different choices in ${n} windows), which is a better sign.`;
+
+    const rows = d.fold_results.map((f) =>
+      `<tr><td>${f.fold}</td>
+         <td>${f.test_start} to ${f.test_end}</td>
+         <td>${fmtParams(f.params)}</td>
+         <td>${f.train.sharpe.toFixed(2)}</td>
+         <td class="${toneRet(f.test.total_return)}">${pct(f.test.total_return)}</td>
+         <td>${pct(f.test.buy_hold_return)}</td>
+         <td class="${f.test.sharpe >= 0 ? "good" : "bad"}">${f.test.sharpe.toFixed(2)}</td>
+         <td>${f.test.trades}</td></tr>`).join("");
+
+    $("wfBox").innerHTML =
+      `<p class="verdict">Across ${n} unseen windows, it was profitable in <span class="${c.profitable > n / 2 ? "good" : "bad"}">${c.profitable}</span> and beat holding in <span class="${c.beat_hold > n / 2 ? "good" : "bad"}">${c.beat_hold}</span>.
+         Stitched together it ${verb(st.total_return)} ${pct(Math.abs(st.total_return))} while holding ${verb(st.buy_hold_return)} ${pct(Math.abs(st.buy_hold_return))}.</p>
+       <div class="chartbox"><canvas id="wfChart" role="img" aria-label="Out-of-sample growth: strategy versus buy and hold"></canvas></div>
+       <div class="lesson ${warn ? "warn" : ""}">${lesson}<br>${stability}</div>
+       <p class="hint">Each window picked its best setting using only its own training data (3x the length of the test window, from ${c.settings_tested} settings), then traded the unseen window right after it. The chart shows only those unseen windows, joined together. Dashed lines mark where a new window starts.</p>
+       <div class="tablewrap"><table>
+         <thead><tr><th>#</th><th>Unseen window</th><th>Setting chosen on training</th><th>Train Sharpe</th><th>Test return</th><th>Hold return</th><th>Test Sharpe</th><th>Trades</th></tr></thead>
+         <tbody>${rows}</tbody></table></div>
+       <p class="hint">Average test Sharpe: ${c.avg_test_sharpe.toFixed(2)}. Stitched max drawdown: ${pct(st.max_drawdown)} (holding: ${pct(st.buy_hold_max_drawdown)}). Switching settings between windows is not charged extra fees here.</p>`;
+
+    const ch = d.stitched.chart;
+    const idxs = ch.fold_starts.map((t) => ch.time.findIndex((x) => x >= t));
+    if (wfChart) wfChart.destroy();
+    wfChart = new Chart($("wfChart"), {
+      type: "line",
+      plugins: [foldLines],
+      data: {
+        labels: ch.time.map((t) => t.slice(0, 10)),
+        datasets: [
+          { label: "Strategy (unseen windows only)", data: ch.equity, borderColor: "#0f7b6c", borderWidth: 2.5, pointRadius: 0, tension: 0 },
+          { label: "Buy and hold", data: ch.buy_hold, borderColor: "#8a93a0", borderWidth: 2, pointRadius: 0, borderDash: [6, 4], tension: 0 },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { position: "top", align: "start" },
+          tooltip: { callbacks: { label: (x) => `${x.dataset.label}: ${x.parsed.y.toFixed(3)}x` } },
+          foldLines: { indexes: idxs },
+        },
+        scales: {
+          x: { ticks: { maxTicksLimit: 8, maxRotation: 0 }, grid: { display: false } },
+          y: { title: { display: true, text: "Growth of 1.00 (unseen windows only)" }, grid: { color: "#e6ebf0" } },
+        },
+      },
+    });
+    $("wfPanel").hidden = false;
+  }
+
+  async function walkForward() {
+    showError("");
+    const btn = $("wf");
+    btn.disabled = true; btn.textContent = "Running...";
+    try {
+      renderWF(await getJSON("/walkforward", {
+        strategy: $("strategy").value,
+        fee: Number($("fee").value) / 100,
+        folds: $("folds").value,
+      }));
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = "Run walk-forward test";
+    }
+  }
+
   // ---------- actions ----------
   function query() {
     return {
@@ -404,6 +531,7 @@
 
   $("run").addEventListener("click", run);
   $("opt").addEventListener("click", optimize);
+  $("wf").addEventListener("click", walkForward);
   $("calc").addEventListener("click", calc);
   init();
 </script>
