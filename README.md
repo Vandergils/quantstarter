@@ -1,35 +1,49 @@
 # QuantStarter
-  ![tests](https://github.com/Vandergils/quantstarter/actions/workflows/tests.yml/badge.svg)
+
+![tests](https://github.com/Vandergils/quantstarter/actions/workflows/tests.yml/badge.svg)
+![license](https://img.shields.io/badge/license-MIT-blue)
 
 A small, beginner-friendly toolkit for testing crypto trading ideas on historical prices before risking real money.
 
-You pick a strategy and its settings in a web dashboard, and QuantStarter shows how it would have performed compared with simply holding the coin, including trading fees and risk measures.
+Pick a strategy and its settings in a web dashboard. QuantStarter shows how it would have performed compared with simply holding the coin, including trading fees and risk measures, and it checks the idea on data it was not set up on, so you can see overfitting for yourself.
 
 ![Dashboard screenshot](docs/screenshot.png)
 
 > **Educational use only.** Backtests are simulations on historical data. Past results do not predict future results. Nothing here is financial advice.
 
-## What's inside
+## Features
 
-| Part | Language | What it does |
-|---|---|---|
-| `collector/` | Python | Downloads price candles (OHLCV) from exchanges via `ccxt`, or from Yahoo Finance as a fallback, and saves them to MySQL |
-| `engine/` | Python | Backtester, strategies, and metrics (return, max drawdown, Sharpe, Sortino, win rate, position sizing) |
-| `api/` | Python (FastAPI) | Serves backtest results as JSON |
-| `dashboard/` | JavaScript | A single-page web UI with sliders, an equity chart, and plain-language metric cards |
-| `db/` | SQL | MySQL schema |
+- **Three example strategies:** moving average crossover, RSI mean reversion, and breakout
+- **Unseen test period:** the newest 30% of the data is held back, and results are shown for training and test side by side
+- **"Find best settings" optimizer:** tries many settings on the training data only, then reveals how the winner does on unseen data (an overfitting demo)
+- **Plain-language results:** verdict sentence, equity chart against buy and hold, and metrics with short explanations
+- **Risk metrics:** total return, max drawdown, Sharpe, Sortino, win rate, number of trades
+- **Position size calculator:** how much to buy so that a stop-loss costs only the percentage you chose
+- **Easy to extend:** a new strategy is one function plus one list entry
+- **Optional C++ indicators** with an automatic pandas fallback
+- **Tests and CI** on Linux and Windows
 
-How data flows:
+## How it fits together
 
 ```
 Exchange / Yahoo -> collector -> MySQL (candles) -> engine -> API -> dashboard
 ```
+
+| Part | Language | What it does |
+|---|---|---|
+| `collector/` | Python | Downloads price candles (OHLCV) from exchanges via `ccxt`, or from Yahoo Finance as a fallback, and saves them to MySQL |
+| `engine/` | Python | Strategies, backtest simulation, metrics, and a terminal report |
+| `api/` | Python (FastAPI) | Serves strategies, backtests and optimizer results as JSON |
+| `dashboard/` | JavaScript | Single-page web UI with controls, chart and tables |
+| `cpp/` | C++ | Optional fast indicators, loaded with `ctypes` |
+| `db/` | SQL | MySQL schema |
 
 ## Requirements
 
 - Python 3.11 or newer
 - MySQL 8 (or MariaDB). Easiest options: [Laragon](https://laragon.org) on Windows, or Docker on any system
 - A modern web browser
+- Optional: a C++ compiler (`g++`) for the fast indicators
 
 ## Setup
 
@@ -42,7 +56,7 @@ cd quantstarter
 
 ### 2. Start MySQL
 
-**Option A: Laragon (Windows, light on RAM).** Open Laragon, click **Start All**, then open phpMyAdmin (`http://localhost/phpmyadmin`) and run the contents of `db/schema.sql` in the SQL tab.
+**Option A: Laragon (Windows, light on RAM).** Open Laragon, click **Start All**, open phpMyAdmin (`http://localhost/phpmyadmin`) and run the contents of `db/schema.sql` in the SQL tab.
 
 **Option B: Docker.**
 
@@ -50,7 +64,7 @@ cd quantstarter
 docker compose up -d
 ```
 
-The database and table are created automatically from `db/schema.sql`. Change the password in `docker-compose.yml` before using it for anything beyond local testing.
+The database and table are created automatically from `db/schema.sql`. Change the password in `docker-compose.yml` before using it for anything beyond local testing. *The Docker setup is untested by the author. Please open an issue if it fails.*
 
 ### 3. Configure the database connection
 
@@ -61,11 +75,11 @@ cp collector/.env.example collector/.env        # macOS / Linux
 copy collector\.env.example collector\.env      # Windows (cmd)
 ```
 
-Laragon's default is user `root` with an empty password. If you use the Docker option, set `DB_PASSWORD` to the password from `docker-compose.yml`.
+Laragon's default is user `root` with an empty password. If you use Docker, set `DB_PASSWORD` to the password from `docker-compose.yml`. The `.env` file is ignored by git, so your password is never uploaded.
 
 ### 4. Install Python packages
 
-Using a virtual environment keeps things tidy:
+A virtual environment keeps things tidy:
 
 ```bash
 python -m venv .venv
@@ -79,7 +93,7 @@ python -m pip install -r requirements.txt
 Pick one:
 
 ```bash
-python collector/collect.py          # from an exchange (ccxt), default Bybit/Binance settings in the file
+python collector/collect.py          # from an exchange via ccxt
 python collector/collect_yahoo.py    # from Yahoo Finance, no API key needed
 ```
 
@@ -87,66 +101,86 @@ Some networks or regions block exchange APIs. If `collect.py` fails with a netwo
 
 The collector and the backtester must use the same source name. The defaults in `engine/backtest.py` and `api/main.py` are `yahoo` and `BTC/USD`. If you collect from an exchange, change those defaults to match (for example `bybit` and `BTC/USDT`).
 
-### 6. Run a backtest in the terminal
+### 6. Compare the strategies in the terminal
 
 ```bash
-python engine/backtest.py
+python engine/backtest.py     # all strategies, default settings, full period
+python engine/report.py       # training vs unseen test, plus the optimizer's best settings
 ```
 
-### 7. Start the API and the dashboard
+### 7. Start the API and open the dashboard
 
 ```bash
 python -m uvicorn api.main:app --reload
 ```
 
-Then open `dashboard/index.html` in your browser (or serve the folder with any static server). Interactive API docs are at `http://127.0.0.1:8000/docs`.
+Then open `dashboard/index.html` in your browser. With Laragon you can also use `http://localhost/quantstarter/dashboard/`. Interactive API docs are at `http://127.0.0.1:8000/docs`.
+
+## Using the dashboard
+
+1. Choose a **strategy** and adjust its settings.
+2. Keep the **unseen test** on (it defaults to the last 30% of the data).
+3. Press **Run backtest** to see the equity curve and the numbers.
+4. Press **Find best settings** to see how the best setting from the training data holds up on unseen data.
 
 ## How to read the results
 
+Read the **Unseen test** column first. That is the closest thing to an honest result.
+
 | Metric | What it tells you |
 |---|---|
-| Total return vs buy and hold | Did the strategy beat doing nothing? |
+| Strategy vs buy and hold return | Did the idea beat doing nothing? |
 | Max drawdown | The worst fall from a peak. Could you sit through it? |
 | Sharpe ratio | Return per unit of risk. Roughly: above 1 is decent, below 0 lost money |
-| Sortino ratio | Like Sharpe, but only counts downside swings |
+| Trades | Every trade pays the fee. Hundreds usually means fees dominate, and a handful means the result may be luck |
 | Win rate | Share of trades that made money. Low is fine if winners are much bigger than losers |
-| Trades | More trades means more fees, and very few trades means the result may be luck |
+| Training vs test | If it only works on the training part, it probably fit past noise (overfitting) |
 
-A result looks promising only if it holds up when you raise the fee, change the settings slightly, and test a different time period. Be careful of **overfitting**: if you try many settings and keep the best one, you mostly found what fit past noise. Tune on one part of the data and check on a part you did not touch.
+A result looks promising only if it holds up when you raise the fee, change the settings slightly, and test a different time period.
+
+### What the example results taught
+
+On hourly BTC data from November 2024 to October 2026 (0.1% fee, last 30% held back), the author found:
+
+- The default moving average crossover lost 42% on the training period while buy and hold lost 7%.
+- The best RSI setting found on training returned +30.6% there, and then **lost 8.7%** on unseen data. That reversal is overfitting.
+- Buy and hold gained 15.7% in the test period, and no strategy beat it on return. Trend-following looked better in the test period partly because the market was rising.
+- The default RSI made hundreds of trades, and fees alone took a large share of the account.
+
+Your numbers will differ depending on when you download the data. The lessons usually stay the same.
+
+## The strategies
+
+All three are long-only: for each candle the strategy either holds the coin or sits in cash. Every trade happens on the **next** candle, so a strategy never uses information it could not have had yet.
+
+| Strategy | Idea | Tends to struggle when |
+|---|---|---|
+| Moving average crossover | Buy when the fast average rises above the slow one (trend following) | The market moves sideways and the signal flips constantly |
+| RSI mean reversion | Buy after a sharp drop, sell once the price recovers | The price keeps falling after the dip |
+| Breakout | Buy a new N-candle high, sell a new low over half that period | False breakouts reverse straight away |
 
 ## Add your own strategy
 
-A strategy only has to decide, for each candle, whether to hold (`1`) or stay in cash (`0`). In `engine/backtest.py`, `sma_crossover` is the example. The key lines are:
+Strategies live in `engine/strategies.py`. Write a function that returns a 0/1 signal for every candle, then add it to the `STRATEGIES` list with its settings:
 
 ```python
-signal = (df["fast"] > df["slow"]).astype(int)
-df["position"] = signal.shift(1).fillna(0)   # trade on the NEXT candle
+def sig_momentum(df, lookback=72):
+    """Hold while the price is higher than it was `lookback` candles ago."""
+    return (df["close"] > df["close"].shift(lookback)).astype(int)
 ```
 
-The `shift(1)` matters: it makes the strategy act on the following candle, so it never trades on information it could not have had yet (look-ahead bias). Keep it in any strategy you write. The metrics, API, and dashboard work with any strategy that returns a table with the columns `position`, `strategy_ret`, `equity`, and `buy_hold`.
+The API, optimizer and dashboard pick it up automatically. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full example and the rules (no look-ahead, integer settings, fees applied for you).
 
-## Project layout
+## Optional: faster indicators with C++
 
+The project works without this. If you have a C++ compiler, build a native library for faster indicators:
+
+```bash
+python cpp/build.py
+python cpp/benchmark.py
 ```
-quantstarter/
-├── README.md
-├── LICENSE
-├── requirements.txt
-├── docker-compose.yml
-├── db/schema.sql
-├── collector/
-│   ├── collect.py
-│   ├── collect_yahoo.py
-│   ├── test_exchanges.py
-│   └── .env.example
-├── engine/
-│   ├── backtest.py
-│   ├── metrics.py
-│   └── sweep.py
-├── api/main.py
-├── dashboard/index.html
-└── tests/test_metrics.py
-```
+
+If the library is not built, the pandas versions run instead and give the same numbers. On Windows, `g++` comes with [MSYS2](https://www.msys2.org): open the **MSYS2 UCRT64** terminal and run `pacman -S mingw-w64-ucrt-x86_64-gcc`. The compiled `.dll` / `.so` file is ignored by git, so everyone builds their own.
 
 ## Tests
 
@@ -155,15 +189,58 @@ python -m pip install pytest
 python -m pytest tests
 ```
 
-## Ideas for contributions
+Tests need no database or internet. The tests for the C++ library are skipped if it is not built. GitHub runs the tests automatically on every push.
 
-- More strategies (RSI, Bollinger Bands, breakout, momentum)
-- A strategy dropdown in the dashboard and API
-- Train/test split to show overfitting
-- Optional C++ module (via `pybind11`) for faster indicators
+## Known limits
+
+- Results come from one asset and a limited time span, so a single test period is a small sample.
+- Only the trading fee is modelled. Real trading also has slippage, delays and exchange downtime.
+- Sharpe and Sortino assume hourly candles (`HOURS_PER_YEAR` in `engine/metrics.py`). Use 365 for daily candles.
+- The API allows requests from any origin, which is fine for local use but should be restricted before any deployment.
+
+## Project layout
+
+```
+quantstarter/
+├── README.md
+├── CONTRIBUTING.md
+├── LICENSE
+├── requirements.txt
+├── docker-compose.yml
+├── .github/workflows/tests.yml
+├── db/schema.sql
+├── collector/
+│   ├── collect.py
+│   ├── collect_yahoo.py
+│   ├── test_exchanges.py
+│   └── .env.example
+├── engine/
+│   ├── strategies.py       strategies and the shared simulation
+│   ├── backtest.py         data loading and a terminal comparison
+│   ├── metrics.py          return, drawdown, Sharpe, Sortino, win rate, position size
+│   ├── fast.py             indicators: C++ if built, pandas otherwise
+│   ├── report.py           training vs unseen test report
+│   └── sweep.py
+├── cpp/
+│   ├── indicators.cpp
+│   ├── build.py
+│   └── benchmark.py
+├── api/main.py
+├── dashboard/index.html
+├── docs/screenshot.png
+└── tests/
+```
+
+## Contributing
+
+Ideas that would help:
+
+- More strategies (Bollinger Bands, momentum, volatility filters)
+- A walk-forward test across several time windows
 - More assets and timeframes
+- A beginner "Learn" section in the dashboard
 
-Issues and pull requests are welcome.
+See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and pull requests are welcome.
 
 ## License
 
