@@ -34,6 +34,7 @@ def fold_windows(n: int, folds: int):
 def stats(seg: pd.DataFrame) -> dict:
     s = summary(seg)
     s["trades"] = int(seg["trade"].sum())
+    s["exposure"] = float(seg["position"].mean())  # share of candles spent holding the coin
     return {k: (v if math.isfinite(v) else 0.0) for k, v in s.items()}
 
 

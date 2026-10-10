@@ -163,6 +163,7 @@
               <dt>Strategy vs buy and hold return</dt><dd>Did the idea beat simply holding the coin?</dd>
               <dt>Max drawdown</dt><dd>The worst fall from a peak. Could you sit through it?</dd>
               <dt>Sharpe ratio</dt><dd>Return per unit of risk. Above 1 is decent, below 0 means it lost money.</dd>
+              <dt>Time in market</dt><dd>Share of the time the strategy held the coin. A strategy that is out of the market half the time will lose less than holding in a fall, even without any skill.</dd>
               <dt>Trades</dt><dd>Every trade pays the fee. Very few trades means the result may be luck.</dd>
               <dt>Win rate</dt><dd>Share of trades that made money. Low is fine if the wins are much bigger than the losses.</dd>
               <dt>Training vs unseen test</dt><dd>If the idea only works on the training part, it probably fit past noise (overfitting).</dd>
@@ -341,6 +342,7 @@
     ["Buy and hold max drawdown", (m) => pct(m.buy_hold_max_drawdown), () => ""],
     ["Sharpe ratio", (m) => m.sharpe.toFixed(2), (m) => (m.sharpe >= 1 ? "good" : m.sharpe < 0 ? "bad" : "")],
     ["Trades", (m) => m.trades.toLocaleString(), () => ""],
+    ["Time in market", (m) => pct(m.exposure), () => ""],
     ["Win rate", (m) => pct(m.win_rate), () => ""],
   ];
 
@@ -486,14 +488,17 @@
     const n = c.folds;
     const verb = (x) => (x >= 0 ? "gained" : "lost");
 
+    const share = c.beat_hold / n;
     let lesson, warn = false;
-    if (c.profitable <= Math.floor(n / 3) || st.total_return < 0) {
-      lesson = "The strategy lost money in most unseen windows. There is no evidence here that this idea works on this data.";
+    if (st.total_return < 0 && share < 0.5) {
+      lesson = `It lost money overall (${pct(st.total_return)}), was profitable in only ${c.profitable} of ${n} windows, and did not beat holding in most of them. There is no evidence here that this idea works on this data.`;
       warn = true;
-    } else if (c.beat_hold / n >= 0.6 && st.total_return > st.buy_hold_return) {
-      lesson = "It beat simply holding in most windows, which is a good sign. Still check higher fees and other periods before trusting it.";
+    } else if (st.total_return < 0) {
+      lesson = `It lost money overall, but it did better than holding in ${c.beat_hold} of ${n} windows and was in the market only ${pct(st.exposure)} of the time. That is protection, not profit: any strategy that sits in cash during a fall loses less than holding. This test cannot tell timing skill from simply being out of the market.`;
+    } else if (share >= 0.6 && st.total_return > st.buy_hold_return) {
+      lesson = `It made money overall and beat holding in ${c.beat_hold} of ${n} windows, which is a good sign. Still check higher fees and other periods before trusting it.`;
     } else {
-      lesson = "Mixed result: it made money in some windows but did not clearly beat holding. A strategy that wins only sometimes is hard to rely on.";
+      lesson = `Mixed result: it made money overall but did not clearly beat holding (it did better in ${c.beat_hold} of ${n} windows). A strategy that wins only sometimes is hard to rely on.`;
     }
     const stability = c.distinct_settings >= Math.ceil(n * 0.6)
       ? `The best setting changed in ${c.distinct_settings} of ${n} windows. When the "best" setting keeps changing, picking it is mostly chasing noise.`
@@ -518,7 +523,7 @@
        <div class="tablewrap"><table>
          <thead><tr><th>#</th><th>Unseen window</th><th>Setting chosen on training</th><th>Train Sharpe</th><th>Test return</th><th>Hold return</th><th>Test Sharpe</th><th>Trades</th></tr></thead>
          <tbody>${rows}</tbody></table></div>
-       <p class="hint">Average test Sharpe: ${c.avg_test_sharpe.toFixed(2)}. Stitched max drawdown: ${pct(st.max_drawdown)} (holding: ${pct(st.buy_hold_max_drawdown)}). Switching settings between windows is not charged extra fees here.</p>`;
+       <p class="hint">Average test Sharpe: ${c.avg_test_sharpe.toFixed(2)}. In the market ${pct(st.exposure)} of the time. Stitched max drawdown: ${pct(st.max_drawdown)} (holding: ${pct(st.buy_hold_max_drawdown)}). Switching settings between windows is not charged extra fees here.</p>`;
 
     const ch = d.stitched.chart;
     const idxs = ch.fold_starts.map((t) => ch.time.findIndex((x) => x >= t));

@@ -84,3 +84,10 @@ def test_stitched_equity_is_built_from_test_windows_only():
     # a fold's test window starts right after its training window, never inside it
     first = out["fold_results"][0]
     assert first["train_end"] <= first["test_start"]
+
+
+def test_exposure_is_a_share_between_zero_and_one():
+    out = run_walk_forward(make_df(), "sma", folds=3)
+    assert 0.0 <= out["stitched"]["metrics"]["exposure"] <= 1.0
+    for fold in out["fold_results"]:
+        assert 0.0 <= fold["test"]["exposure"] <= 1.0

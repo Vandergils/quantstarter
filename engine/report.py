@@ -12,6 +12,7 @@ def stats(result, start, end):
     seg = slice_result(result, start, end)
     s = summary(seg)
     s["trades"] = int(seg["trade"].sum())
+    s["exposure"] = float(seg["position"].mean())
     return s
 
 
@@ -19,7 +20,7 @@ def line(label, s):
     return (
         f"  {label:<10} strategy {s['total_return']:>8.2%}  hold {s['buy_hold_return']:>8.2%}  "
         f"maxDD {s['max_drawdown']:>8.2%}  holdDD {s['buy_hold_max_drawdown']:>8.2%}  "
-        f"Sharpe {s['sharpe']:>5.2f}  trades {s['trades']:>4}"
+        f"Sharpe {s['sharpe']:>5.2f}  trades {s['trades']:>4}  inMarket {s['exposure']:>4.0%}"
     )
 
 

@@ -57,6 +57,7 @@ def parse_params(spec: dict, query) -> dict:
 def seg_summary(seg) -> dict:
     s = summary(seg)
     s["trades"] = int(seg["trade"].sum())
+    s["exposure"] = float(seg["position"].mean())
     return {k: (v if math.isfinite(v) else 0.0) for k, v in s.items()}
 
 
