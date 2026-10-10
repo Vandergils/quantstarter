@@ -18,7 +18,8 @@ def stats(result, start, end):
 def line(label, s):
     return (
         f"  {label:<10} strategy {s['total_return']:>8.2%}  hold {s['buy_hold_return']:>8.2%}  "
-        f"maxDD {s['max_drawdown']:>8.2%}  Sharpe {s['sharpe']:>5.2f}  trades {s['trades']:>4}"
+        f"maxDD {s['max_drawdown']:>8.2%}  holdDD {s['buy_hold_max_drawdown']:>8.2%}  "
+        f"Sharpe {s['sharpe']:>5.2f}  trades {s['trades']:>4}"
     )
 
 

@@ -236,9 +236,9 @@ quantstarter/
 Ideas that would help:
 
 - More strategies (Bollinger Bands, momentum, volatility filters)
-- A walk-forward test across several time windows
+- **Walk-forward test:** repeats the train/test routine over several time windows to check consistency
 - More assets and timeframes
-- A beginner "Learn" section in the dashboard
+- **Learn tab:** plain-language explanations and two small calculators inside the dashboard
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and pull requests are welcome.
 

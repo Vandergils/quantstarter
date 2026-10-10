@@ -58,6 +58,22 @@
   .empty { color: var(--muted); padding: 1.5rem 0; }
   .calc-out { margin-top: .75rem; font-weight: 600; }
   footer { margin-top: 1.5rem; color: var(--muted); font-size: .8rem; }
+
+  .tabs { display: flex; gap: .5rem; margin-bottom: 1.25rem; border-bottom: 1px solid var(--line); }
+  .tabs button { width: auto; background: transparent; color: var(--muted); border: 0; border-bottom: 3px solid transparent;
+    border-radius: 0; padding: .5rem .9rem; margin-bottom: -1px; }
+  .tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--strategy); }
+  .learn { max-width: 760px; }
+  .learn .panel h2 { font-size: 1.1rem; }
+  .learn p { margin: .4rem 0; }
+  .learn ul { margin: .4rem 0 .4rem 1.2rem; padding: 0; }
+  .learn li { margin: .25rem 0; }
+  .toy { background: #f3f6f9; border-radius: 8px; padding: .8rem 1rem; margin-top: .8rem; }
+  .toy .row { display: flex; flex-wrap: wrap; gap: 1rem; }
+  .toy .row > div { flex: 1 1 200px; }
+  .toy .out { font-size: 1.1rem; font-weight: 600; margin: .6rem 0 0; }
+  .check li { list-style: none; margin-left: -1.2rem; padding-left: 1.4rem; position: relative; }
+  .check li::before { content: "\2713"; position: absolute; left: 0; color: var(--good); font-weight: 700; }
 </style>
 </head>
 <body>
@@ -69,6 +85,12 @@
 
   <div id="error" class="error" role="alert" hidden></div>
 
+  <nav class="tabs" role="tablist" aria-label="Sections">
+    <button id="tabApp" type="button" role="tab" aria-selected="true" aria-controls="app">Backtest</button>
+    <button id="tabLearn" type="button" role="tab" aria-selected="false" aria-controls="learn">Learn</button>
+  </nav>
+
+  <div id="app" role="tabpanel" aria-labelledby="tabApp">
   <div class="layout">
     <aside>
       <section class="panel" aria-labelledby="strat-h">
@@ -160,6 +182,88 @@
         <div id="wfBox"></div>
       </section>
     </main>
+  </div>
+  </div>
+
+  <div id="learn" class="learn" role="tabpanel" aria-labelledby="tabLearn" hidden>
+    <section class="panel">
+      <h2>What is a backtest?</h2>
+      <p>A backtest replays old prices and asks: <em>"What would have happened if I had followed this rule?"</em> The rule might be "buy when a fast average rises above a slow one". It is a way to check an idea cheaply before risking money. It is not a prediction, because markets change and the future rarely repeats the past.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Reading the equity curve</h2>
+      <p>The green line shows how <strong>1.00</strong> invested at the start would have grown or shrunk. The dashed grey line is <strong>buy and hold</strong>, which means buying once and doing nothing. It is your benchmark. A strategy that cannot beat simply holding, or at least be much safer, is hard to justify, because holding is free and effortless.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Fees add up fast</h2>
+      <p>Every buy and every sell costs a fee. A strategy that trades a lot pays it again and again. Try it:</p>
+      <div class="toy">
+        <div class="row">
+          <div class="field"><label for="toyTrades">Number of trades <output id="toyTradesOut">384</output></label>
+            <input id="toyTrades" type="range" min="0" max="1000" step="1" value="384"></div>
+          <div class="field"><label for="toyFee">Fee per trade <output id="toyFeeOut">0.10%</output></label>
+            <input id="toyFee" type="range" min="0" max="0.5" step="0.01" value="0.10"></div>
+        </div>
+        <p id="toyFeeResult" class="out" aria-live="polite"></p>
+        <p class="hint">Approximate share of your account lost to fees alone, before any price move.</p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Drawdown: how deep is the hole?</h2>
+      <p><strong>Max drawdown</strong> is the worst fall from a peak to a later low. It shows what you would have had to live through. A big drawdown is hard to sit through, and many people sell at the bottom. Losses are also harder to recover than they look:</p>
+      <div class="toy">
+        <div class="field"><label for="toyDd">Your account falls by <output id="toyDdOut">50%</output></label>
+          <input id="toyDd" type="range" min="5" max="90" step="1" value="50"></div>
+        <p id="toyDdResult" class="out" aria-live="polite"></p>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>Sharpe ratio</h2>
+      <p>Sharpe measures return <em>per unit of risk</em>, so a smooth +10% scores higher than a wild +10%. As a rough guide: below 0 means it lost money, 0 to 1 is weak, and above 1 is decent. Treat very high values (like 3 or more) with suspicion, since they are more often a bug or overfitting than a discovery. This dashboard assumes hourly candles when it scales Sharpe to a year.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Overfitting: the biggest trap</h2>
+      <p>If you test hundreds of settings and keep the best one, you have mostly found the setting that fit the <em>noise</em> in old data. It looks brilliant on the past and often fails on new prices. Three tools in this dashboard fight it:</p>
+      <ul>
+        <li><strong>Unseen test period.</strong> The newest part of the data is held back and never used to choose settings.</li>
+        <li><strong>Find best settings.</strong> Picks a winner on the training part, then shows the unseen result. A big drop is overfitting in action.</li>
+        <li><strong>Walk-forward test.</strong> Repeats this over several time windows. A good idea should win in most of them, and its best setting should not change every time.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Mistakes that fake good results</h2>
+      <ul>
+        <li><strong>Look-ahead bias.</strong> Using information the strategy could not have had yet. Here every trade happens on the <em>next</em> candle to prevent it.</li>
+        <li><strong>Ignoring fees.</strong> Many trades can turn a winner into a loser.</li>
+        <li><strong>Too few trades.</strong> With 10 trades, luck can explain everything.</li>
+        <li><strong>One asset, one period.</strong> A rising market makes almost any "buy" rule look smart.</li>
+        <li><strong>Skipping reality.</strong> Real trading also has slippage, delays and exchange outages that a simple backtest ignores.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Risk per trade</h2>
+      <p>Even a good strategy can have a losing streak. A common beginner rule is to risk only about <strong>1% of the account</strong> on any single trade. The position size calculator on the Backtest tab works out how much to buy so that your stop-loss costs only that percentage.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Checklist before trusting a result</h2>
+      <ul class="check">
+        <li>It held up on the <strong>unseen test</strong>, not just the training part</li>
+        <li>It beat buy and hold, or was clearly safer (smaller drawdown)</li>
+        <li>It won in <strong>most walk-forward windows</strong></li>
+        <li>It still works with a <strong>higher fee</strong></li>
+        <li>Nearby settings give similar results, not just one lucky value</li>
+        <li>It made enough trades for the result to mean something</li>
+      </ul>
+      <p class="hint">Even when every box is ticked, a backtest only says "worth testing further", never "will make money". This is educational, not financial advice.</p>
+    </section>
   </div>
 
   <footer>Simulation on historical data only. Past results do not predict future results. This is not financial advice.</footer>
@@ -533,6 +637,38 @@
   $("opt").addEventListener("click", optimize);
   $("wf").addEventListener("click", walkForward);
   $("calc").addEventListener("click", calc);
+
+  // ---------- tabs ----------
+  function showTab(name) {
+    const learn = name === "learn";
+    $("app").hidden = learn;
+    $("learn").hidden = !learn;
+    $("tabApp").setAttribute("aria-selected", String(!learn));
+    $("tabLearn").setAttribute("aria-selected", String(learn));
+  }
+  $("tabApp").addEventListener("click", () => showTab("app"));
+  $("tabLearn").addEventListener("click", () => showTab("learn"));
+
+  // ---------- learn: small calculators ----------
+  function toyFees() {
+    const trades = Number($("toyTrades").value);
+    const fee = Number($("toyFee").value) / 100;
+    $("toyTradesOut").textContent = trades;
+    $("toyFeeOut").textContent = (fee * 100).toFixed(2) + "%";
+    const lost = 1 - Math.pow(1 - fee, trades);
+    $("toyFeeResult").textContent = `About ${(lost * 100).toFixed(1)}% of your account goes to fees.`;
+  }
+  function toyDrawdown() {
+    const d = Number($("toyDd").value) / 100;
+    $("toyDdOut").textContent = Math.round(d * 100) + "%";
+    const need = d / (1 - d);
+    $("toyDdResult").textContent = `You then need a gain of ${(need * 100).toFixed(0)}% just to get back to where you started.`;
+  }
+  ["toyTrades", "toyFee"].forEach((id) => $(id).addEventListener("input", toyFees));
+  $("toyDd").addEventListener("input", toyDrawdown);
+  toyFees();
+  toyDrawdown();
+
   init();
 </script>
 </body>
