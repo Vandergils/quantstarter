@@ -20,3 +20,8 @@ Thumbs.db
 # local database dumps and data files
 *.sql.bak
 *.sqlite
+
+# compiled C++ library (built locally with: python cpp/build.py)
+*.dll
+*.so
+*.dylib

@@ -26,7 +26,7 @@ Exchange / Yahoo -> collector -> MySQL (candles) -> engine -> API -> dashboard
 
 ## Requirements
 
-- Python 3.10 or newer
+- Python 3.11 or newer
 - MySQL 8 (or MariaDB). Easiest options: [Laragon](https://laragon.org) on Windows, or Docker on any system
 - A modern web browser
 
@@ -167,3 +167,4 @@ Issues and pull requests are welcome.
 ## License
 
 MIT. See [LICENSE](LICENSE).
+![tests](https://github.com/Vandergils/quantstarter/actions/workflows/tests.yml/badge.svg)

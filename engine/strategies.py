@@ -1,5 +1,17 @@
+"""Strategies and the shared simulation.
+
+A strategy only has to answer one question for every candle:
+"should I hold the coin (1) or stay in cash (0)?"
+
+To add your own strategy:
+1. Write a function  sig_xxx(df, **params)  that returns a 0/1 pandas Series.
+2. Add an entry to STRATEGIES at the bottom (label, params, grid, validate).
+The API, optimizer and dashboard pick it up automatically.
+"""
 import numpy as np
 import pandas as pd
+
+import fast as fast_indicators  # C++ if built, pandas otherwise
 
 
 def run_signal(df: pd.DataFrame, signal: pd.Series, fee: float = 0.001) -> pd.DataFrame:
@@ -35,24 +47,21 @@ def _hold_until_changed(df: pd.DataFrame, enter: pd.Series, leave: pd.Series) ->
 
 def sig_sma(df, fast=20, slow=50):
     """Hold while the fast average is above the slow average."""
-    f = df["close"].rolling(fast).mean()
-    s = df["close"].rolling(slow).mean()
+    f = fast_indicators.sma(df["close"], fast)
+    s = fast_indicators.sma(df["close"], slow)
     return (f > s).astype(int)
 
 
 def sig_rsi(df, period=14, buy_below=30, sell_above=55):
     """Buy when RSI says 'oversold', sell when it has recovered."""
-    delta = df["close"].diff()
-    gain = delta.clip(lower=0).rolling(period).mean()
-    loss = (-delta.clip(upper=0)).rolling(period).mean()
-    rsi = 100 - 100 / (1 + gain / loss)
+    rsi = fast_indicators.rsi(df["close"], period)
     return _hold_until_changed(df, rsi < buy_below, rsi > sell_above)
 
 
 def sig_breakout(df, lookback=100):
     """Buy a new high over the last N candles, sell a new low over the last N/2."""
-    high = df["close"].rolling(lookback).max().shift(1)
-    low = df["close"].rolling(max(lookback // 2, 2)).min().shift(1)
+    high = fast_indicators.rolling_max(df["close"], lookback).shift(1)
+    low = fast_indicators.rolling_min(df["close"], max(lookback // 2, 2)).shift(1)
     return _hold_until_changed(df, df["close"] > high, df["close"] < low)
 
 
