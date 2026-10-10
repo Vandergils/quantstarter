@@ -1,4 +1,5 @@
 # QuantStarter
+  ![tests](https://github.com/Vandergils/quantstarter/actions/workflows/tests.yml/badge.svg)
 
 A small, beginner-friendly toolkit for testing crypto trading ideas on historical prices before risking real money.
 
@@ -167,4 +168,3 @@ Issues and pull requests are welcome.
 ## License
 
 MIT. See [LICENSE](LICENSE).
-![tests](https://github.com/Vandergils/quantstarter/actions/workflows/tests.yml/badge.svg)
