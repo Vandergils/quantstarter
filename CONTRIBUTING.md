@@ -56,7 +56,7 @@ The API and the dashboard pick it up automatically. No other file needs to chang
 ### Rules every strategy must follow
 
 - **No look-ahead.** The shared simulation already delays the signal by one candle (`signal.shift(1)`), so use only data up to the current candle. Never use `.shift(-1)` or any future value.
-- **Integers for settings.** Parameters are read as whole numbers.
+- **Whole numbers by default.** Settings are read as integers. For a decimal setting, add `"type": "float"` to that parameter (see `width` in the Bollinger Bands entry).
 - **Fees are applied for you.** Do not subtract fees inside a strategy.
 - **Keep it simple.** Few parameters, clear docstring. Beginners will read your code.
 

@@ -66,3 +66,21 @@ def test_default_settings_pass_their_own_validation():
 def test_grid_covers_every_parameter():
     for spec in STRATEGIES.values():
         assert set(spec["grid"]) == {p["name"] for p in spec["params"]}
+
+
+def test_bollinger_buys_a_sharp_drop_and_sells_the_recovery():
+    from strategies import sig_bollinger
+
+    close = [100.0] * 40 + [80.0] * 3 + [100.0] * 5
+    df = pd.DataFrame({"close": close}, index=pd.date_range("2024-01-01", periods=len(close), freq="h"))
+    signal = sig_bollinger(df, period=20, width=2.0)
+    assert signal.iloc[39] == 0            # flat market: no trade
+    assert signal.iloc[40] == 1            # the drop falls below the lower band: buy
+    assert signal.iloc[-1] == 0            # back at the average: sold
+
+
+def test_decimal_settings_are_declared_with_a_type():
+    for spec in STRATEGIES.values():
+        for p in spec["params"]:
+            if isinstance(p["default"], float):
+                assert p.get("type") == "float"

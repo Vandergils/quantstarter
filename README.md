@@ -13,7 +13,7 @@ Pick a strategy and its settings in a web dashboard. QuantStarter shows how it w
 
 ## Features
 
-- **Three example strategies:** moving average crossover, RSI mean reversion, and breakout
+- **Four example strategies:** moving average crossover, RSI mean reversion, breakout, and Bollinger Bands
 - **Unseen test period:** the newest 30% of the data is held back, and results are shown for training and test side by side
 - **"Find best settings" optimizer:** tries many settings on the training data only, then reveals how the winner does on unseen data (an overfitting demo)
 - **Walk-forward test:** repeats the train/test routine over several sliding windows, so you can see whether an idea wins consistently or only once
@@ -144,7 +144,7 @@ A result looks promising only if it holds up when you raise the fee, change the 
 
 ### What the example results taught
 
-On hourly BTC-USD data from November 2024 to October 2026 (0.1% fee), the author found that **none of the three example strategies showed convincing out-of-sample profit**:
+On hourly BTC-USD data from November 2024 to October 2026 (0.1% fee), the author found that **none of the first three example strategies (moving average, RSI, breakout) showed convincing out-of-sample profit**. Bollinger Bands was added afterwards, so run the walk-forward test on it yourself:
 
 - **A single split looked promising, then fell apart.** With the last 30% held back, the best Breakout setting returned +14.2% against +15.7% for holding, with a much smaller drawdown (-11.0% vs -29.7%). The best RSI setting returned +30.6% on training and then **lost 8.7%** on unseen data, which is overfitting.
 - **Walk-forward was harsher.** Over five unseen windows, the moving average strategy was profitable in only one. It lost less than holding in four of them, but holding itself lost money in four of the five windows, so that is *protection, not profit*: any strategy that sits in cash during a fall loses less. Breakout and RSI also showed no evidence of profit.
@@ -155,13 +155,14 @@ Your numbers will differ depending on when you download the data. The lessons us
 
 ## The strategies
 
-All three are long-only: for each candle the strategy either holds the coin or sits in cash. Every trade happens on the **next** candle, so a strategy never uses information it could not have had yet.
+All four are long-only: for each candle the strategy either holds the coin or sits in cash. Every trade happens on the **next** candle, so a strategy never uses information it could not have had yet.
 
 | Strategy | Idea | Tends to struggle when |
 |---|---|---|
 | Moving average crossover | Buy when the fast average rises above the slow one (trend following) | The market moves sideways and the signal flips constantly |
 | RSI mean reversion | Buy after a sharp drop, sell once the price recovers | The price keeps falling after the dip |
 | Breakout | Buy a new N-candle high, sell a new low over half that period | False breakouts reverse straight away |
+| Bollinger Bands | Buy when price drops below the lower band (average minus N standard deviations), sell when it returns to the average | The price keeps falling after the dip, or the bands are so wide that it almost never trades |
 
 ## Add your own strategy
 

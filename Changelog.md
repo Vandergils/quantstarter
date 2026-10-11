@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Bollinger Bands** strategy (buy below the lower band, sell at the middle band)
+- Strategy settings can now be decimals (`"type": "float"` in the registry)
+
 ## 0.1.0 - 2026-10-11
 
 First public release.

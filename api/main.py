@@ -42,7 +42,7 @@ def parse_params(spec: dict, query) -> dict:
     for p in spec["params"]:
         raw = query.get(p["name"], p["default"])
         try:
-            value = int(float(raw))
+            value = round(float(raw), 2) if p.get("type") == "float" else int(float(raw))
         except (TypeError, ValueError):
             raise HTTPException(400, f"{p['label']} must be a number.")
         if not p["min"] <= value <= p["max"]:

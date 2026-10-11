@@ -1,13 +1,3 @@
-"""Strategies and the shared simulation.
-
-A strategy only has to answer one question for every candle:
-"should I hold the coin (1) or stay in cash (0)?"
-
-To add your own strategy:
-1. Write a function  sig_xxx(df, **params)  that returns a 0/1 pandas Series.
-2. Add an entry to STRATEGIES at the bottom (label, params, grid, validate).
-The API, optimizer and dashboard pick it up automatically.
-"""
 import numpy as np
 import pandas as pd
 
@@ -65,6 +55,18 @@ def sig_breakout(df, lookback=100):
     return _hold_until_changed(df, df["close"] > high, df["close"] < low)
 
 
+def sig_bollinger(df, period=20, width=2.0):
+    """Buy when price drops below the lower band, sell when it climbs back to the middle band.
+
+    Middle band = average of the last `period` closes.
+    Lower band  = middle band minus `width` standard deviations.
+    """
+    mid = fast_indicators.sma(df["close"], period)
+    std = df["close"].rolling(period).std()
+    lower = mid - width * std
+    return _hold_until_changed(df, df["close"] < lower, df["close"] > mid)
+
+
 def backtest(df, strategy: str, params: dict, fee: float = 0.001) -> pd.DataFrame:
     return run_signal(df, STRATEGIES[strategy]["func"](df, **params), fee)
 
@@ -109,6 +111,20 @@ STRATEGIES = {
              "hint": "Longer means fewer but slower signals."},
         ],
         "grid": {"lookback": [24, 48, 100, 200, 300]},
+        "validate": lambda p: None,
+    },
+    "bollinger": {
+        "label": "Bollinger Bands",
+        "description": "Bet on bounces inside a normal range. Buy when price falls below the lower band, sell when it climbs back to the average.",
+        "func": sig_bollinger,
+        "params": [
+            {"name": "period", "label": "Average period (candles)", "min": 10, "max": 100, "step": 1, "default": 20,
+             "hint": "How many candles the average and the bands look back."},
+            {"name": "width", "label": "Band width (standard deviations)", "type": "float",
+             "min": 0.5, "max": 3.5, "step": 0.1, "default": 2.0,
+             "hint": "Wider bands wait for bigger drops, so there are fewer trades."},
+        ],
+        "grid": {"period": [10, 20, 30, 50], "width": [1.5, 2.0, 2.5, 3.0]},
         "validate": lambda p: None,
     },
 }
