@@ -7,6 +7,7 @@
 - **Bollinger Bands** strategy (buy below the lower band, sell at the middle band)
 - Strategy settings can now be decimals (`"type": "float"` in the registry)
 - **Several coins:** `collect_yahoo.py` accepts several tickers, the dashboard has a **Data** menu, and **Compare across assets** runs one strategy, with the same settings, on every coin in the database (new `/datasets` and `/compare` endpoints)
+- **Realistic costs:** a slippage setting added to the fee on every view, and a **Cost stress test** (new `/cost-test` endpoint) that reruns a strategy at rising costs and finds the cost where the profit disappears
 - **Settings map:** a grid of neighbouring settings scored on training and unseen data, with buy and hold shown for each period, a plain-language verdict and a warning when results swing with the market (new `/sensitivity` endpoint and dashboard panel)
 
 ## 0.1.0 - 2026-10-11
@@ -32,7 +33,7 @@ First public release.
 ### Known limits
 
 - Long-only, one asset, hourly candles assumed for Sharpe and Sortino
-- Only the trading fee is modelled (no slippage)
+- Costs are a fee plus a flat slippage per trade (no order-size effects or delays)
 - The API allows requests from any origin, which is fine for local use only
 - The Docker setup has not been tested by the author
 

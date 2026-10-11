@@ -12,6 +12,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "engine"))
 
 from backtest import list_datasets, load_candles  # noqa: E402
 from compare import compare_assets  # noqa: E402
+from costs import cost_stress  # noqa: E402
 from metrics import position_size, summary  # noqa: E402
 from strategies import STRATEGIES, backtest, slice_result  # noqa: E402
 from sensitivity import run_sensitivity  # noqa: E402
@@ -32,6 +33,11 @@ MIN_CANDLES = 300
 
 
 # ---------- helpers ----------
+
+def total_cost(fee: float, slippage: float) -> float:
+    """Cost of one trade: the exchange fee plus slippage (the price you lose by not trading at the quote)."""
+    return round(fee + slippage, 6)
+
 
 def get_spec(strategy: str) -> dict:
     if strategy not in STRATEGIES:
@@ -99,11 +105,13 @@ def run_backtest(
     request: Request,
     strategy: str = "sma",
     fee: float = Query(0.001, ge=0, le=0.05),
+    slippage: float = Query(0.0, ge=0, le=0.05, description="Extra cost per trade on top of the fee."),
     holdout: float = Query(0.3, ge=0, le=0.5, description="Share of the newest data kept as an unseen test. 0 = off."),
     exchange: str = "yahoo",
     symbol: str = "BTC/USD",
     timeframe: str = "1h",
 ):
+    fee = total_cost(fee, slippage)
     if 0 < holdout < 0.1:
         raise HTTPException(400, "Holdout must be 0 (off) or at least 0.1.")
 
@@ -160,6 +168,7 @@ def run_backtest(
 def optimize(
     strategy: str = "sma",
     fee: float = Query(0.001, ge=0, le=0.05),
+    slippage: float = Query(0.0, ge=0, le=0.05, description="Extra cost per trade on top of the fee."),
     holdout: float = Query(0.3, ge=0.1, le=0.5),
     exchange: str = "yahoo",
     symbol: str = "BTC/USD",
@@ -170,6 +179,7 @@ def optimize(
     This is the classic overfitting demo: the best-looking setting on past data
     often looks much worse on data it has never seen.
     """
+    fee = total_cost(fee, slippage)
     spec = get_spec(strategy)
     data = get_data(exchange, symbol, timeframe)
     n = len(data)
@@ -208,12 +218,14 @@ def optimize(
 def walkforward(
     strategy: str = "sma",
     fee: float = Query(0.001, ge=0, le=0.05),
+    slippage: float = Query(0.0, ge=0, le=0.05, description="Extra cost per trade on top of the fee."),
     folds: int = Query(5, ge=3, le=8, description="How many train/test windows to slide through the data."),
     exchange: str = "yahoo",
     symbol: str = "BTC/USD",
     timeframe: str = "1h",
 ):
     """Repeat 'pick the best setting on training data, then test it on unseen data' over several windows."""
+    fee = total_cost(fee, slippage)
     get_spec(strategy)
     data = get_data(exchange, symbol, timeframe)
     try:
@@ -230,6 +242,7 @@ def sensitivity(
     x: Optional[str] = None,
     y: Optional[str] = None,
     fee: float = Query(0.001, ge=0, le=0.05),
+    slippage: float = Query(0.0, ge=0, le=0.05, description="Extra cost per trade on top of the fee."),
     holdout: float = Query(0.3, ge=0.1, le=0.5),
     count: int = Query(9, ge=4, le=12, description="How many values to try along each axis."),
     exchange: str = "yahoo",
@@ -237,6 +250,7 @@ def sensitivity(
     timeframe: str = "1h",
 ):
     """Test a grid of neighbouring settings, scored on training and on unseen data."""
+    fee = total_cost(fee, slippage)
     spec = get_spec(strategy)
     names = [p["name"] for p in spec["params"]]
     x = x or names[0]
@@ -260,10 +274,12 @@ def compare(
     request: Request,
     strategy: str = "sma",
     fee: float = Query(0.001, ge=0, le=0.05),
+    slippage: float = Query(0.0, ge=0, le=0.05, description="Extra cost per trade on top of the fee."),
     holdout: float = Query(0.3, ge=0.1, le=0.5),
     timeframe: str = "1h",
 ):
     """Run one strategy, with the same settings, on every asset in the database."""
+    fee = total_cost(fee, slippage)
     spec = get_spec(strategy)
     params = parse_params(spec, request.query_params)
 
@@ -286,6 +302,28 @@ def compare(
     for row in result["assets"]:
         row["source"] = best[row["asset"]]["exchange"]
     return {**result, "disclaimer": DISCLAIMER}
+
+
+@app.get("/cost-test")
+def cost_test(
+    request: Request,
+    strategy: str = "sma",
+    fee: float = Query(0.001, ge=0, le=0.05),
+    slippage: float = Query(0.0, ge=0, le=0.05),
+    holdout: float = Query(0.3, ge=0.1, le=0.5),
+    exchange: str = "yahoo",
+    symbol: str = "BTC/USD",
+    timeframe: str = "1h",
+):
+    """Run the same strategy at rising trading costs and find the cost where the profit disappears."""
+    spec = get_spec(strategy)
+    params = parse_params(spec, request.query_params)
+    data = get_data(exchange, symbol, timeframe)
+    try:
+        result = cost_stress(data, strategy, params, holdout)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    return {**result, "current_cost": total_cost(fee, slippage), "disclaimer": DISCLAIMER}
 
 
 @app.get("/position-size")

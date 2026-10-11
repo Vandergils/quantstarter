@@ -25,7 +25,7 @@ def axis_values(param: dict, count: int = 9, include=None) -> list:
     return sorted(values)
 
 
-def _numbers(result, start: int, end: int) -> dict:
+def segment_numbers(result, start: int, end: int) -> dict:
     ret = result["strategy_ret"].iloc[start:end]
     sh = sharpe(ret)
     total = float((1 + ret).prod() - 1)
@@ -80,7 +80,7 @@ def run_sensitivity(data, strategy, x_name, y_name, fixed, fee=0.001, holdout=0.
             result = backtest(data, strategy, params, fee)
             cells.append(
                 {"xi": xi, "yi": yi, "x": xv, "y": yv,
-                 "train": _numbers(result, 0, cut), "test": _numbers(result, cut, n)}
+                 "train": segment_numbers(result, 0, cut), "test": segment_numbers(result, cut, n)}
             )
 
     if not cells:

@@ -84,6 +84,7 @@
   .heat td.na { background: #eef1f4; color: #a0a8b3; }
   .heat td.best { outline: 3px solid var(--ink); outline-offset: -3px; font-weight: 700; }
   .heat td.cur { box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 5px var(--focus); }
+  tr.cur-row td { background: #f3f6f9; font-weight: 600; }
 </style>
 </head>
 <body>
@@ -125,6 +126,12 @@
         </div>
 
         <div class="field">
+          <label for="slip">Slippage per trade <output id="slipOut">0.00%</output></label>
+          <input id="slip" type="range" min="0" max="0.5" step="0.01" value="0.00">
+          <p class="hint">Real orders rarely fill at exactly the price you saw. Try 0.05% to 0.10% for a more realistic result.</p>
+        </div>
+
+        <div class="field">
           <label for="holdout">Keep newest data as an unseen test</label>
           <select id="holdout">
             <option value="0">Off (use all data)</option>
@@ -158,6 +165,7 @@
         </div>
         <button id="mapBtn" type="button" class="ghost" style="margin-top:0">Draw settings map</button>
         <button id="cmpBtn" type="button" class="ghost">Compare across assets</button>
+        <button id="costBtn" type="button" class="ghost">Cost stress test</button>
       </section>
 
       <section class="panel" aria-labelledby="calc-h">
@@ -223,6 +231,11 @@
         <h2 id="cmp-h">Across assets</h2>
         <div id="cmpBox"></div>
       </section>
+
+      <section id="costPanel" class="panel" aria-labelledby="cost-h" hidden>
+        <h2 id="cost-h">Cost stress test</h2>
+        <div id="costBox"></div>
+      </section>
     </main>
   </div>
   </div>
@@ -240,7 +253,7 @@
 
     <section class="panel">
       <h2>Fees add up fast</h2>
-      <p>Every buy and every sell costs a fee. A strategy that trades a lot pays it again and again. Try it:</p>
+      <p>Every buy and every sell costs a fee, and real orders also lose a little to <strong>slippage</strong>, because you rarely trade at exactly the price you saw. A strategy that trades a lot pays both again and again. Try it:</p>
       <div class="toy">
         <div class="row">
           <div class="field"><label for="toyTrades">Number of trades <output id="toyTradesOut">384</output></label>
@@ -251,6 +264,7 @@
         <p id="toyFeeResult" class="out" aria-live="polite"></p>
         <p class="hint">Approximate share of your account lost to fees alone, before any price move.</p>
       </div>
+      <p>The <strong>Cost stress test</strong> button runs your strategy again at rising costs per trade and tells you at what cost the profit disappears. A strategy that only works at tiny costs is fragile.</p>
     </section>
 
     <section class="panel">
@@ -318,7 +332,7 @@
         <li>It held up on the <strong>unseen test</strong>, not just the training part</li>
         <li>It beat buy and hold, or was clearly safer (smaller drawdown)</li>
         <li>It won in <strong>most walk-forward windows</strong></li>
-        <li>It still works with a <strong>higher fee</strong></li>
+        <li>It still works with a <strong>higher cost</strong> (see the Cost stress test)</li>
         <li>Nearby settings give similar results on the <strong>settings map</strong>, not just one lucky value</li>
         <li>It made enough trades for the result to mean something</li>
         <li>It also holds up on <strong>other coins</strong> (Compare across assets)</li>
@@ -392,6 +406,7 @@
   }
 
   $("fee").addEventListener("input", () => { $("feeOut").textContent = Number($("fee").value).toFixed(2) + "%"; });
+  $("slip").addEventListener("input", () => { $("slipOut").textContent = Number($("slip").value).toFixed(2) + "%"; });
   $("strategy").addEventListener("change", buildParams);
 
   // ---------- result rendering ----------
@@ -626,6 +641,7 @@
         ...dataQuery(),
         strategy: $("strategy").value,
         fee: Number($("fee").value) / 100,
+        slippage: Number($("slip").value) / 100,
         folds: $("folds").value,
       }));
     } catch (e) {
@@ -641,6 +657,7 @@
       strategy: $("strategy").value,
       ...currentParams(),
       fee: Number($("fee").value) / 100,
+        slippage: Number($("slip").value) / 100,
       holdout: $("holdout").value,
       ...dataQuery(),
     };
@@ -668,6 +685,7 @@
         ...dataQuery(),
         strategy: $("strategy").value,
         fee: Number($("fee").value) / 100,
+        slippage: Number($("slip").value) / 100,
         holdout: Number($("holdout").value) || 0.3,
       }));
     } catch (e) {
@@ -707,6 +725,7 @@
   $("wf").addEventListener("click", walkForward);
   $("mapBtn").addEventListener("click", drawMap);
   $("cmpBtn").addEventListener("click", compareAssets);
+  $("costBtn").addEventListener("click", costTest);
   $("mapMetric").addEventListener("change", renderMap);
   $("calc").addEventListener("click", calc);
 
@@ -795,7 +814,7 @@
       `<p>Each cell is one setting, tested from scratch. Green is positive and red is negative. &#9733; marks the best setting on training, and the blue ring marks your current setting. Hover a cell for details.</p>
        <div class="lesson ${warn ? "warn" : ""}">${lesson}<br>${bestLine}</div>
        <div class="heatgrid">${grid("train", "Training")}${grid("test", "Unseen test")}</div>
-       <p class="hint">${d.x.label} runs left to right${hasY ? `, ${d.y.label} runs top to bottom` : ""}. Values are spaced evenly across each setting's range.${held ? ` Other settings held at: ${held}.` : ""} Fee ${(d.fee * 100).toFixed(2)}%.</p>`;
+       <p class="hint">${d.x.label} runs left to right${hasY ? `, ${d.y.label} runs top to bottom` : ""}. Values are spaced evenly across each setting's range.${held ? ` Other settings held at: ${held}.` : ""} Cost per trade (fee plus slippage) ${(d.fee * 100).toFixed(2)}%.</p>`;
     $("mapPanel").hidden = false;
   }
 
@@ -814,6 +833,7 @@
         ...currentParams(),
         x,
         fee: Number($("fee").value) / 100,
+        slippage: Number($("slip").value) / 100,
         holdout: Number($("holdout").value) || 0.3,
       };
       if (y) q.y = y;
@@ -861,7 +881,7 @@
         // results belong to the old data, so clear them
         $("result").hidden = true;
         $("empty").hidden = false;
-        ["optPanel", "wfPanel", "mapPanel", "cmpPanel"].forEach((id) => { $(id).hidden = true; });
+        ["optPanel", "wfPanel", "mapPanel", "cmpPanel", "costPanel"].forEach((id) => { $(id).hidden = true; });
       });
     } catch (e) {
       // an older API without /datasets: the API's default data is used
@@ -918,12 +938,86 @@
         strategy: $("strategy").value,
         ...currentParams(),
         fee: Number($("fee").value) / 100,
+        slippage: Number($("slip").value) / 100,
         holdout: Number($("holdout").value) || 0.3,
       }));
     } catch (e) {
       showError(e.message);
     } finally {
       btn.disabled = false; btn.textContent = "Compare across assets";
+    }
+  }
+
+
+  // ---------- cost stress test ----------
+  function renderCost(d) {
+    const fmtC = (c) => (c * 100).toFixed(2) + "%";
+    const be = d.break_even.test, bt = d.break_even.train;
+    const cur = d.current_cost;
+
+    let sentence, lesson, warn = false;
+    if (be.status === "not_profitable_at_zero") {
+      sentence = "On the unseen data the strategy lost money even with zero trading costs.";
+      lesson = "Costs are not the problem here. The idea itself is not working on this data, so lower costs would not rescue it.";
+      warn = true;
+    } else if (be.status === "crosses") {
+      sentence = `On the unseen data the profit disappears at about ${fmtC(be.cost)} per trade.`;
+      if (be.cost < 0.0015) {
+        lesson = "That is within the range of what trading really costs (fee plus slippage). The edge is fragile: a little extra cost turns it into a loss.";
+        warn = true;
+      } else if (be.cost < 0.004) {
+        lesson = "That is close to realistic trading costs, so be careful. Make sure your fee and slippage assumptions are not too optimistic.";
+      } else {
+        lesson = "That leaves some cushion above typical trading costs. Delays and thin order books are still not modelled.";
+      }
+    } else {
+      sentence = `On the unseen data it stays profitable even at ${fmtC(be.cost)} per trade.`;
+      lesson = "That is a comfortable cushion against trading costs. Delays and thin order books are still not modelled.";
+    }
+
+    const trainLine = bt.status === "not_profitable_at_zero" ? "On the training data it was not profitable even at zero cost."
+      : bt.status === "crosses" ? `On the training data the profit disappears at about ${fmtC(bt.cost)} per trade.`
+      : `On the training data it stays profitable up to ${fmtC(bt.cost)} per trade.`;
+
+    if (bt.status === "not_profitable_at_zero" && be.status !== "not_profitable_at_zero") {
+      lesson += " Caution: it was not profitable on the training data at any cost, so a good unseen result may come from the market during that period, not from the strategy.";
+      warn = true;
+    }
+    const matched = d.rows.some((r) => Math.abs(r.cost - cur) < 1e-9);
+    const rows = d.rows.map((r) =>
+      `<tr class="${Math.abs(r.cost - cur) < 1e-9 ? "cur-row" : ""}">
+         <td>${fmtC(r.cost)}${Math.abs(r.cost - cur) < 1e-9 ? " (yours)" : ""}</td>
+         <td class="${toneRet(r.train["return"])}">${pct(r.train["return"])}</td>
+         <td class="${toneRet(r.test["return"])}">${pct(r.test["return"])}</td>
+         <td class="${r.test.sharpe >= 0 ? "good" : "bad"}">${r.test.sharpe.toFixed(2)}</td></tr>`).join("");
+
+    $("costBox").innerHTML =
+      `<p class="verdict">${sentence}</p>
+       <div class="lesson ${warn ? "warn" : ""}">${lesson}<br>${trainLine}</div>
+       <div class="tablewrap"><table>
+         <thead><tr><th>Cost per trade</th><th>Training return</th><th>Unseen return</th><th>Unseen Sharpe</th></tr></thead>
+         <tbody>${rows}</tbody></table></div>
+       <p class="hint">Same strategy and settings (${fmtParams(d.params)}), run again at each cost. It makes ${d.rows[0].test.trades} trades in the unseen period, and every trade pays the cost. ${matched ? "" : `Your current cost is ${fmtC(cur)}. `}Spot exchange fees are often around 0.1% per trade, and slippage depends on order size and liquidity, so the right level for you may differ.</p>`;
+    $("costPanel").hidden = false;
+  }
+
+  async function costTest() {
+    showError("");
+    const btn = $("costBtn");
+    btn.disabled = true; btn.textContent = "Testing...";
+    try {
+      renderCost(await getJSON("/cost-test", {
+        ...dataQuery(),
+        strategy: $("strategy").value,
+        ...currentParams(),
+        fee: Number($("fee").value) / 100,
+        slippage: Number($("slip").value) / 100,
+        holdout: Number($("holdout").value) || 0.3,
+      }));
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = "Cost stress test";
     }
   }
 

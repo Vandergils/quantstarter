@@ -18,6 +18,7 @@ Pick a strategy and its settings in a web dashboard. QuantStarter shows how it w
 - **"Find best settings" optimizer:** tries many settings on the training data only, then reveals how the winner does on unseen data (an overfitting demo)
 - **Walk-forward test:** repeats the train/test routine over several sliding windows, so you can see whether an idea wins consistently or only once
 - **Several coins:** download more than one asset and pick the data in the dashboard, or run **Compare across assets** to see whether an idea holds beyond Bitcoin
+- **Realistic costs:** a slippage setting on top of the fee, and a **cost stress test** that shows how the result changes as trading costs rise and at what cost the profit disappears
 - **Settings map:** colour grids of neighbouring settings, scored on training and unseen data next to buy and hold, so a lone lucky setting (or a result that just follows the market) stands out from a broad region that works
 - **Plain-language results:** verdict sentence, equity chart against buy and hold, and metrics with short explanations
 - **Risk metrics:** total return, max drawdown, Sharpe, Sortino, win rate, number of trades, and time in market
@@ -130,7 +131,8 @@ Then open `dashboard/index.html` in your browser. With Laragon you can also use 
 5. Press **Run walk-forward test** to repeat that over several time windows and check consistency.
 6. Press **Draw settings map** to see whether a good result is a lone lucky spike or a broad region of settings that work.
 7. Press **Compare across assets** to run the same settings on every coin in your database.
-8. Open the **Learn** tab if any of the terms are new.
+8. Press **Cost stress test** to see at what trading cost the profit disappears. Set **Slippage** above zero for a more realistic result in every other view.
+9. Open the **Learn** tab if any of the terms are new.
 
 ## How to read the results
 
@@ -204,7 +206,7 @@ Tests need no database or internet. The tests for the C++ library are skipped if
 ## Known limits
 
 - Results come from one asset and a limited time span, so a single test period is a small sample.
-- Only the trading fee is modelled. Real trading also has slippage, delays and exchange downtime.
+- Costs are modelled as a fee plus a flat slippage per trade. Real trading also has order-size effects, delays and exchange downtime.
 - Sharpe and Sortino assume hourly candles (`HOURS_PER_YEAR` in `engine/metrics.py`). Use 365 for daily candles.
 - The API allows requests from any origin, which is fine for local use but should be restricted before any deployment.
 
@@ -232,6 +234,7 @@ quantstarter/
 │   ├── walkforward.py      walk-forward test across sliding windows
 │   ├── sensitivity.py      settings map: a grid of neighbouring settings
 │   ├── compare.py          the same strategy run across several assets
+│   ├── costs.py            cost stress test and break-even cost
 │   ├── fast.py             indicators: C++ if built, pandas otherwise
 │   ├── report.py           training vs unseen test report
 │   └── sweep.py
@@ -252,7 +255,7 @@ Ideas that would help:
 - More strategies (Bollinger Bands, momentum, volatility filters)
 - Other timeframes (the metrics currently assume hourly candles) and non-crypto assets
 - Short selling or a cash-versus-leverage option (currently long-only)
-- Slippage and a realistic cost model
+- Order-size-aware slippage (cost that grows with position size)
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and pull requests are welcome.
 
