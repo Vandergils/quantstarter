@@ -2,6 +2,7 @@ import itertools
 import math
 import os
 import sys
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,6 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "engine"))
 from backtest import load_candles  # noqa: E402
 from metrics import position_size, summary  # noqa: E402
 from strategies import STRATEGIES, backtest, slice_result  # noqa: E402
+from sensitivity import run_sensitivity  # noqa: E402
 from walkforward import run_walk_forward  # noqa: E402
 
 app = FastAPI(title="QuantStarter API")
@@ -36,7 +38,7 @@ def get_spec(strategy: str) -> dict:
     return STRATEGIES[strategy]
 
 
-def parse_params(spec: dict, query) -> dict:
+def parse_params(spec: dict, query, validate: bool = True) -> dict:
     """Read the strategy settings from the URL, check ranges, fall back to defaults."""
     params = {}
     for p in spec["params"]:
@@ -48,9 +50,10 @@ def parse_params(spec: dict, query) -> dict:
         if not p["min"] <= value <= p["max"]:
             raise HTTPException(400, f"{p['label']} must be between {p['min']} and {p['max']}.")
         params[p["name"]] = value
-    error = spec["validate"](params)
-    if error:
-        raise HTTPException(400, error)
+    if validate:
+        error = spec["validate"](params)
+        if error:
+            raise HTTPException(400, error)
     return params
 
 
@@ -208,6 +211,35 @@ def walkforward(
     data = get_data(exchange, symbol, timeframe)
     try:
         result = run_walk_forward(data, strategy, fee, folds)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    return {**result, "disclaimer": DISCLAIMER}
+
+
+@app.get("/sensitivity")
+def sensitivity(
+    request: Request,
+    strategy: str = "sma",
+    x: Optional[str] = None,
+    y: Optional[str] = None,
+    fee: float = Query(0.001, ge=0, le=0.05),
+    holdout: float = Query(0.3, ge=0.1, le=0.5),
+    count: int = Query(9, ge=4, le=12, description="How many values to try along each axis."),
+    exchange: str = "yahoo",
+    symbol: str = "BTC/USD",
+    timeframe: str = "1h",
+):
+    """Test a grid of neighbouring settings, scored on training and on unseen data."""
+    spec = get_spec(strategy)
+    names = [p["name"] for p in spec["params"]]
+    x = x or names[0]
+    if y is None and len(names) > 1:
+        y = next(n for n in names if n != x)
+    # the settings that are not on an axis stay at their current value
+    fixed = parse_params(spec, request.query_params, validate=False)
+    data = get_data(exchange, symbol, timeframe)
+    try:
+        result = run_sensitivity(data, strategy, x, y, fixed, fee, holdout, count)
     except ValueError as error:
         raise HTTPException(400, str(error))
     return {**result, "disclaimer": DISCLAIMER}

@@ -17,6 +17,7 @@ Pick a strategy and its settings in a web dashboard. QuantStarter shows how it w
 - **Unseen test period:** the newest 30% of the data is held back, and results are shown for training and test side by side
 - **"Find best settings" optimizer:** tries many settings on the training data only, then reveals how the winner does on unseen data (an overfitting demo)
 - **Walk-forward test:** repeats the train/test routine over several sliding windows, so you can see whether an idea wins consistently or only once
+- **Settings map:** colour grids of neighbouring settings, scored on training and unseen data, so a lone lucky setting stands out from a broad region that works
 - **Plain-language results:** verdict sentence, equity chart against buy and hold, and metrics with short explanations
 - **Risk metrics:** total return, max drawdown, Sharpe, Sortino, win rate, number of trades, and time in market
 - **Learn tab:** short explanations of backtests, fees, drawdown, Sharpe and overfitting, with two small interactive calculators
@@ -125,7 +126,8 @@ Then open `dashboard/index.html` in your browser. With Laragon you can also use 
 3. Press **Run backtest** to see the equity curve and the numbers.
 4. Press **Find best settings** to see how the best setting from the training data holds up on unseen data.
 5. Press **Run walk-forward test** to repeat that over several time windows and check consistency.
-6. Open the **Learn** tab if any of the terms are new.
+6. Press **Draw settings map** to see whether a good result is a lone lucky spike or a broad region of settings that work.
+7. Open the **Learn** tab if any of the terms are new.
 
 ## How to read the results
 
@@ -225,6 +227,7 @@ quantstarter/
 │   ├── backtest.py         data loading and a terminal comparison
 │   ├── metrics.py          return, drawdown, Sharpe, Sortino, win rate, position size
 │   ├── walkforward.py      walk-forward test across sliding windows
+│   ├── sensitivity.py      settings map: a grid of neighbouring settings
 │   ├── fast.py             indicators: C++ if built, pandas otherwise
 │   ├── report.py           training vs unseen test report
 │   └── sweep.py

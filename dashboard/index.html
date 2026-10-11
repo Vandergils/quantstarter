@@ -74,6 +74,16 @@
   .toy .out { font-size: 1.1rem; font-weight: 600; margin: .6rem 0 0; }
   .check li { list-style: none; margin-left: -1.2rem; padding-left: 1.4rem; position: relative; }
   .check li::before { content: "\2713"; position: absolute; left: 0; color: var(--good); font-weight: 700; }
+  .heatgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; margin-top: .9rem; }
+  @media (max-width: 980px) { .heatgrid { grid-template-columns: 1fr; } }
+  .heatgrid h3 { margin-top: 0; }
+  .heat table { font-size: .74rem; }
+  .heat th { text-align: center; padding: .25rem .2rem; font-weight: 500; color: var(--muted); border-bottom: 0; }
+  .heat td { text-align: center; padding: .38rem .15rem; border: 1px solid #fff; min-width: 2.7rem; }
+  .heat th.corner { white-space: nowrap; font-size: .66rem; text-align: left; padding-left: .3rem; }
+  .heat td.na { background: #eef1f4; color: #a0a8b3; }
+  .heat td.best { outline: 3px solid var(--ink); outline-offset: -3px; font-weight: 700; }
+  .heat td.cur { box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 5px var(--focus); }
 </style>
 </head>
 <body>
@@ -134,6 +144,14 @@
           <p class="hint">Repeats the train and test routine over several time windows.</p>
         </div>
         <button id="wf" type="button" class="ghost" style="margin-top:0">Run walk-forward test</button>
+
+        <div class="field" style="margin-top:1rem">
+          <label for="mapX">Settings map</label>
+          <select id="mapX" aria-label="Setting for the horizontal axis"></select>
+          <select id="mapY" aria-label="Setting for the vertical axis" style="margin-top:.4rem"></select>
+          <p class="hint">Tests a grid of neighbouring settings, to show whether a good result is a lone lucky spike or a broad region.</p>
+        </div>
+        <button id="mapBtn" type="button" class="ghost" style="margin-top:0">Draw settings map</button>
       </section>
 
       <section class="panel" aria-labelledby="calc-h">
@@ -182,6 +200,18 @@
         <h2 id="wf-h">Walk-forward test</h2>
         <div id="wfBox"></div>
       </section>
+
+      <section id="mapPanel" class="panel" aria-labelledby="map-h" hidden>
+        <h2 id="map-h">Settings map</h2>
+        <div class="field" style="max-width:220px">
+          <label for="mapMetric">Show</label>
+          <select id="mapMetric">
+            <option value="sharpe">Sharpe ratio</option>
+            <option value="return">Return</option>
+          </select>
+        </div>
+        <div id="mapBox"></div>
+      </section>
     </main>
   </div>
   </div>
@@ -229,11 +259,23 @@
 
     <section class="panel">
       <h2>Overfitting: the biggest trap</h2>
-      <p>If you test hundreds of settings and keep the best one, you have mostly found the setting that fit the <em>noise</em> in old data. It looks brilliant on the past and often fails on new prices. Three tools in this dashboard fight it:</p>
+      <p>If you test hundreds of settings and keep the best one, you have mostly found the setting that fit the <em>noise</em> in old data. It looks brilliant on the past and often fails on new prices. Four tools in this dashboard fight it:</p>
       <ul>
         <li><strong>Unseen test period.</strong> The newest part of the data is held back and never used to choose settings.</li>
         <li><strong>Find best settings.</strong> Picks a winner on the training part, then shows the unseen result. A big drop is overfitting in action.</li>
         <li><strong>Walk-forward test.</strong> Repeats this over several time windows. A good idea should win in most of them, and its best setting should not change every time.</li>
+        <li><strong>Settings map.</strong> Tests a whole grid of neighbouring settings. A real edge shows as a broad green region, and overfitting shows as one bright cell surrounded by red.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
+      <h2>Reading the settings map</h2>
+      <p>Pick two settings (for example the fast and slow average) and press <strong>Draw settings map</strong>. You get two colour grids: one scored on the training data and one on the unseen data. Every cell is one combination of settings.</p>
+      <ul>
+        <li><strong>A broad green area on both grids</strong> means the idea does not depend on exact numbers. That is a good sign.</li>
+        <li><strong>One bright cell surrounded by red</strong> is a lucky spike. Picking it means picking the luck.</li>
+        <li><strong>Green on the left grid, red on the right</strong> is overfitting: settings that fit the past and fail on new prices.</li>
+        <li><strong>Mostly red on both</strong> means the strategy itself does not work on this data, whatever settings you choose.</li>
       </ul>
     </section>
 
@@ -260,7 +302,7 @@
         <li>It beat buy and hold, or was clearly safer (smaller drawdown)</li>
         <li>It won in <strong>most walk-forward windows</strong></li>
         <li>It still works with a <strong>higher fee</strong></li>
-        <li>Nearby settings give similar results, not just one lucky value</li>
+        <li>Nearby settings give similar results on the <strong>settings map</strong>, not just one lucky value</li>
         <li>It made enough trades for the result to mean something</li>
       </ul>
       <p class="hint">Even when every box is ticked, a backtest only says "worth testing further", never "will make money". This is educational, not financial advice.</p>
@@ -315,6 +357,7 @@
     spec.params.forEach((p) => {
       $("p_" + p.name).addEventListener("input", () => { $("o_" + p.name).textContent = $("p_" + p.name).value; });
     });
+    populateAxes();
   }
 
   function currentParams() {
@@ -641,7 +684,113 @@
   $("run").addEventListener("click", run);
   $("opt").addEventListener("click", optimize);
   $("wf").addEventListener("click", walkForward);
+  $("mapBtn").addEventListener("click", drawMap);
+  $("mapMetric").addEventListener("change", renderMap);
   $("calc").addEventListener("click", calc);
+
+
+  // ---------- settings map ----------
+  let lastMap = null;
+
+  function populateAxes() {
+    const spec = specs[$("strategy").value];
+    const opts = spec.params.map((p) => `<option value="${p.name}">${p.label}</option>`).join("");
+    $("mapX").innerHTML = opts;
+    $("mapY").innerHTML = opts;
+    $("mapX").value = spec.params[0].name;
+    $("mapY").hidden = spec.params.length < 2;
+    if (spec.params.length > 1) $("mapY").value = spec.params[1].name;
+  }
+
+  function cellStyle(v, limit) {
+    const a = Math.min(Math.abs(v) / limit, 1) * 0.55;
+    return v >= 0 ? `background:rgba(15,123,108,${a})` : `background:rgba(180,65,47,${a})`;
+  }
+
+  function renderMap() {
+    const d = lastMap;
+    if (!d) return;
+    const metric = $("mapMetric").value;
+    const limit = metric === "sharpe" ? 2 : 0.4;
+    const fmt = (v) => (metric === "sharpe" ? v.toFixed(2) : (v * 100).toFixed(0) + "%");
+    const s = d.summary, bt = s.best;
+    const hasY = !!d.y.name;
+    const where = (x, y) => `${d.x.label} ${x}` + (hasY ? `, ${d.y.label} ${y}` : "");
+
+    const byPos = {};
+    d.cells.forEach((c) => { byPos[c.xi + "-" + c.yi] = c; });
+
+    function grid(part, title) {
+      const head = d.x.values.map((v) => `<th scope="col">${v}</th>`).join("");
+      const rows = d.y.values.map((yv, yi) => {
+        const tds = d.x.values.map((xv, xi) => {
+          const c = byPos[xi + "-" + yi];
+          if (!c) return `<td class="na" title="Not a valid combination">-</td>`;
+          const isBest = bt.xi === xi && bt.yi === yi;
+          const isCur = d.current.xi === xi && d.current.yi === yi;
+          const n = c[part];
+          const tip = `${where(xv, yv)}: ${part === "train" ? "training" : "unseen"} Sharpe ${n.sharpe.toFixed(2)}, return ${pct(n["return"])}, ${n.trades} trades` +
+            (isBest ? " (best on training)" : "") + (isCur ? " (your current setting)" : "");
+          return `<td class="${isBest ? "best" : ""} ${isCur ? "cur" : ""}" style="${cellStyle(n[metric], limit)}" title="${tip}">${fmt(n[metric])}${isBest ? " &#9733;" : ""}</td>`;
+        }).join("");
+        return `<tr>${hasY ? `<th scope="row">${yv}</th>` : ""}${tds}</tr>`;
+      }).join("");
+      return `<div><h3>${title}</h3><div class="tablewrap heat"><table>
+        <thead><tr>${hasY ? `<th class="corner">${d.y.name} &darr; ${d.x.name} &rarr;</th>` : ""}${head}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
+    }
+
+    const pos = Math.round(s.share_positive_test * 100);
+    const gap = s.neighbors.count ? bt.train_sharpe - s.neighbors.avg_train : 0;
+    let lesson, warn = false;
+    if (s.share_positive_test < 0.3) {
+      lesson = `Only ${pos}% of the ${s.valid} settings tested had a positive Sharpe on unseen data. Most settings of this strategy lose on data it has not seen, so there is little to tune here.`;
+      warn = true;
+    } else if (gap > 0.5) {
+      lesson = `The best training setting stands out from its neighbours (Sharpe ${bt.train_sharpe.toFixed(2)}, against an average of ${s.neighbors.avg_train.toFixed(2)} right next to it). A lone peak like this is usually luck, not a real edge.`;
+      warn = true;
+    } else if (s.share_positive_test >= 0.6) {
+      lesson = `${pos}% of the settings had a positive Sharpe on unseen data, and the best one does not stand alone. A broad region that works is a better sign than one lucky cell. Still check fees and the walk-forward test.`;
+    } else {
+      lesson = `Mixed: ${pos}% of the settings were positive on unseen data. Some regions work and others do not, so be careful about trusting exact values.`;
+    }
+    const bestLine = `Best on training (${where(bt.x, bt.y)}): Sharpe ${bt.train_sharpe.toFixed(2)} on training, ${bt.test_sharpe.toFixed(2)} on unseen data` +
+      (s.neighbors.count ? `. Its neighbours averaged ${s.neighbors.avg_test.toFixed(2)} on unseen data.` : ".");
+
+    const held = Object.entries(d.fixed).filter(([k]) => k !== d.x.name && k !== d.y.name).map(([k, v]) => `${k} ${v}`).join(", ");
+
+    $("mapBox").innerHTML =
+      `<p>Each cell is one setting, tested from scratch. Green is positive and red is negative. &#9733; marks the best setting on training, and the blue ring marks your current setting. Hover a cell for details.</p>
+       <div class="lesson ${warn ? "warn" : ""}">${lesson}<br>${bestLine}</div>
+       <div class="heatgrid">${grid("train", "Training")}${grid("test", "Unseen test")}</div>
+       <p class="hint">${d.x.label} runs left to right${hasY ? `, ${d.y.label} runs top to bottom` : ""}. Values are spaced evenly across each setting's range.${held ? ` Other settings held at: ${held}.` : ""} Fee ${(d.fee * 100).toFixed(2)}%.</p>`;
+    $("mapPanel").hidden = false;
+  }
+
+  async function drawMap() {
+    showError("");
+    const spec = specs[$("strategy").value];
+    const x = $("mapX").value;
+    const y = spec.params.length > 1 ? $("mapY").value : "";
+    if (y && x === y) { showError("Pick two different settings for the map axes."); return; }
+    const btn = $("mapBtn");
+    btn.disabled = true; btn.textContent = "Drawing...";
+    try {
+      const q = {
+        strategy: $("strategy").value,
+        ...currentParams(),
+        x,
+        fee: Number($("fee").value) / 100,
+        holdout: Number($("holdout").value) || 0.3,
+      };
+      if (y) q.y = y;
+      lastMap = await getJSON("/sensitivity", q);
+      renderMap();
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = "Draw settings map";
+    }
+  }
 
   // ---------- tabs ----------
   function showTab(name) {

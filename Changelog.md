@@ -6,6 +6,7 @@
 
 - **Bollinger Bands** strategy (buy below the lower band, sell at the middle band)
 - Strategy settings can now be decimals (`"type": "float"` in the registry)
+- **Settings map:** a grid of neighbouring settings scored on training and unseen data, with a plain-language verdict (new `/sensitivity` endpoint and dashboard panel)
 
 ## 0.1.0 - 2026-10-11
 
