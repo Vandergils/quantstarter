@@ -90,3 +90,13 @@ def test_bad_axes_raise():
 def test_too_little_data_raises():
     with pytest.raises(ValueError):
         run_sensitivity(make_df(300), "sma", "fast", "slow", defaults("sma"))
+
+
+def test_buy_and_hold_reference_matches_the_price_move():
+    df = make_df()
+    out = run_sensitivity(df, "sma", "fast", "slow", defaults("sma"), holdout=0.3, count=5)
+    n = len(df)
+    cut = int(n * 0.7)
+    close = df["close"].to_numpy()
+    assert abs(out["hold"]["train"]["return"] - (close[cut - 1] / close[0] - 1)) < 1e-9
+    assert abs(out["hold"]["test"]["return"] - (close[n - 1] / close[cut - 1] - 1)) < 1e-9

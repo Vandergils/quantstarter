@@ -10,7 +10,8 @@ from fastapi.middleware.cors import CORSMiddleware
 # let the API import from ../engine
 sys.path.append(os.path.join(os.path.dirname(__file__), "..", "engine"))
 
-from backtest import load_candles  # noqa: E402
+from backtest import list_datasets, load_candles  # noqa: E402
+from compare import compare_assets  # noqa: E402
 from metrics import position_size, summary  # noqa: E402
 from strategies import STRATEGIES, backtest, slice_result  # noqa: E402
 from sensitivity import run_sensitivity  # noqa: E402
@@ -76,6 +77,12 @@ def get_data(exchange: str, symbol: str, timeframe: str):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/datasets")
+def datasets():
+    """Every price series stored in the database, so the dashboard can offer a choice."""
+    return list_datasets()
 
 
 @app.get("/strategies")
@@ -242,6 +249,42 @@ def sensitivity(
         result = run_sensitivity(data, strategy, x, y, fixed, fee, holdout, count)
     except ValueError as error:
         raise HTTPException(400, str(error))
+    return {**result, "disclaimer": DISCLAIMER}
+
+
+MAX_COMPARE_ASSETS = 8
+
+
+@app.get("/compare")
+def compare(
+    request: Request,
+    strategy: str = "sma",
+    fee: float = Query(0.001, ge=0, le=0.05),
+    holdout: float = Query(0.3, ge=0.1, le=0.5),
+    timeframe: str = "1h",
+):
+    """Run one strategy, with the same settings, on every asset in the database."""
+    spec = get_spec(strategy)
+    params = parse_params(spec, request.query_params)
+
+    # one series per symbol: if two exchanges have the same symbol, keep the longer one
+    best = {}
+    for d in list_datasets():
+        if d["timeframe"] != timeframe:
+            continue
+        if d["symbol"] not in best or d["candles"] > best[d["symbol"]]["candles"]:
+            best[d["symbol"]] = d
+    chosen = list(best.values())[:MAX_COMPARE_ASSETS]
+    if not chosen:
+        raise HTTPException(404, "No data in the database yet. Run a collector first.")
+
+    data = {d["symbol"]: load_candles(d["exchange"], d["symbol"], d["timeframe"]) for d in chosen}
+    try:
+        result = compare_assets(data, strategy, params, fee, holdout)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+    for row in result["assets"]:
+        row["source"] = best[row["asset"]]["exchange"]
     return {**result, "disclaimer": DISCLAIMER}
 
 

@@ -36,6 +36,17 @@ def _numbers(result, start: int, end: int) -> dict:
     }
 
 
+def _hold_numbers(data, start: int, end: int) -> dict:
+    """Buy and hold over the same period, for comparison with the grid."""
+    ret = data["close"].pct_change().fillna(0).iloc[start:end]
+    sh = sharpe(ret)
+    total = float((1 + ret).prod() - 1)
+    return {
+        "sharpe": sh if math.isfinite(sh) else 0.0,
+        "return": total if math.isfinite(total) else 0.0,
+    }
+
+
 def _share(cells, part):
     return sum(c[part]["sharpe"] > 0 for c in cells) / len(cells)
 
@@ -95,6 +106,7 @@ def run_sensitivity(data, strategy, x_name, y_name, fixed, fee=0.001, holdout=0.
             "xi": xs.index(fixed[x_name]) if fixed.get(x_name) in xs else -1,
             "yi": ys.index(fixed[y_name]) if y_name and fixed.get(y_name) in ys else (0 if not y_name else -1),
         },
+        "hold": {"train": _hold_numbers(data, 0, cut), "test": _hold_numbers(data, cut, n)},
         "cells": cells,
         "summary": {
             "valid": len(cells),

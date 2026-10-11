@@ -17,7 +17,8 @@ Pick a strategy and its settings in a web dashboard. QuantStarter shows how it w
 - **Unseen test period:** the newest 30% of the data is held back, and results are shown for training and test side by side
 - **"Find best settings" optimizer:** tries many settings on the training data only, then reveals how the winner does on unseen data (an overfitting demo)
 - **Walk-forward test:** repeats the train/test routine over several sliding windows, so you can see whether an idea wins consistently or only once
-- **Settings map:** colour grids of neighbouring settings, scored on training and unseen data, so a lone lucky setting stands out from a broad region that works
+- **Several coins:** download more than one asset and pick the data in the dashboard, or run **Compare across assets** to see whether an idea holds beyond Bitcoin
+- **Settings map:** colour grids of neighbouring settings, scored on training and unseen data next to buy and hold, so a lone lucky setting (or a result that just follows the market) stands out from a broad region that works
 - **Plain-language results:** verdict sentence, equity chart against buy and hold, and metrics with short explanations
 - **Risk metrics:** total return, max drawdown, Sharpe, Sortino, win rate, number of trades, and time in market
 - **Learn tab:** short explanations of backtests, fees, drawdown, Sharpe and overfitting, with two small interactive calculators
@@ -97,12 +98,13 @@ Pick one:
 
 ```bash
 python collector/collect.py          # from an exchange via ccxt
-python collector/collect_yahoo.py    # from Yahoo Finance, no API key needed
+python collector/collect_yahoo.py                  # from Yahoo Finance (BTC-USD), no API key needed
+python collector/collect_yahoo.py ETH-USD SOL-USD  # one or more other tickers
 ```
 
 Some networks or regions block exchange APIs. If `collect.py` fails with a network error, `collector/test_exchanges.py` shows which exchanges your connection can reach, and `collect_yahoo.py` is the fallback. Hourly Yahoo data covers roughly the last two years.
 
-The collector and the backtester must use the same source name. The defaults in `engine/backtest.py` and `api/main.py` are `yahoo` and `BTC/USD`. If you collect from an exchange, change those defaults to match (for example `bybit` and `BTC/USDT`).
+The dashboard's **Data** menu lists whatever is in your database, so any ticker or exchange you collected can be chosen there (hourly candles only, because the metrics assume them). Running the collector again only adds new candles. The terminal tools (`engine/backtest.py`, `engine/report.py`) use the defaults `yahoo` and `BTC/USD`; change them in `engine/backtest.py` if you collect something else.
 
 ### 6. Compare the strategies in the terminal
 
@@ -121,13 +123,14 @@ Then open `dashboard/index.html` in your browser. With Laragon you can also use 
 
 ## Using the dashboard
 
-1. Choose a **strategy** and adjust its settings.
+1. Choose the **data** (Bitcoin by default) and a **strategy**, and adjust its settings.
 2. Keep the **unseen test** on (it defaults to the last 30% of the data).
 3. Press **Run backtest** to see the equity curve and the numbers.
 4. Press **Find best settings** to see how the best setting from the training data holds up on unseen data.
 5. Press **Run walk-forward test** to repeat that over several time windows and check consistency.
 6. Press **Draw settings map** to see whether a good result is a lone lucky spike or a broad region of settings that work.
-7. Open the **Learn** tab if any of the terms are new.
+7. Press **Compare across assets** to run the same settings on every coin in your database.
+8. Open the **Learn** tab if any of the terms are new.
 
 ## How to read the results
 
@@ -228,6 +231,7 @@ quantstarter/
 │   ├── metrics.py          return, drawdown, Sharpe, Sortino, win rate, position size
 │   ├── walkforward.py      walk-forward test across sliding windows
 │   ├── sensitivity.py      settings map: a grid of neighbouring settings
+│   ├── compare.py          the same strategy run across several assets
 │   ├── fast.py             indicators: C++ if built, pandas otherwise
 │   ├── report.py           training vs unseen test report
 │   └── sweep.py
@@ -246,7 +250,7 @@ quantstarter/
 Ideas that would help:
 
 - More strategies (Bollinger Bands, momentum, volatility filters)
-- More assets and timeframes, and a comparison across coins
+- Other timeframes (the metrics currently assume hourly candles) and non-crypto assets
 - Short selling or a cash-versus-leverage option (currently long-only)
 - Slippage and a realistic cost model
 

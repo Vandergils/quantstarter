@@ -1,4 +1,6 @@
 import os
+import sys
+
 import mysql.connector
 import yfinance as yf
 from dotenv import load_dotenv
@@ -6,10 +8,9 @@ from dotenv import load_dotenv
 load_dotenv()
 
 SOURCE = "yahoo"
-SYMBOL = "BTC/USD"      # label stored in the DB
-YF_TICKER = "BTC-USD"   # Yahoo's ticker
-TIMEFRAME = "1h"        # "1h" or "1d"
-PERIOD = "700d"         # hourly data is limited to ~730 days; use "max" for 1d
+TIMEFRAME = "1h"      # the metrics in this project assume hourly candles
+PERIOD = "700d"       # Yahoo keeps about 730 days of hourly data
+DEFAULT_TICKERS = ["BTC-USD"]
 
 
 def get_db():
@@ -21,15 +22,16 @@ def get_db():
     )
 
 
-def collect():
-    df = yf.Ticker(YF_TICKER).history(period=PERIOD, interval=TIMEFRAME)
+def collect(ticker: str, db) -> int:
+    symbol = ticker.upper().replace("-", "/")
+    df = yf.Ticker(ticker).history(period=PERIOD, interval=TIMEFRAME)
     if df.empty:
-        print("No data returned. Check your connection or ticker.")
-        return
+        print(f"{ticker}: no data returned (check the ticker and your connection).")
+        return 0
 
     rows = [
         (
-            SOURCE, SYMBOL, TIMEFRAME,
+            SOURCE, symbol, TIMEFRAME,
             int(idx.timestamp() * 1000),
             float(r["Open"]), float(r["High"]), float(r["Low"]),
             float(r["Close"]), float(r["Volume"]),
@@ -37,7 +39,6 @@ def collect():
         for idx, r in df.iterrows()
     ]
 
-    db = get_db()
     cur = db.cursor()
     cur.executemany(
         """INSERT IGNORE INTO candles
@@ -46,10 +47,20 @@ def collect():
         rows,
     )
     db.commit()
-    print(f"Saved {len(rows)} candles from {YF_TICKER} ({TIMEFRAME}).")
+    added = cur.rowcount
     cur.close()
-    db.close()
+    print(f"{ticker}: downloaded {len(rows)} candles, {added} new, stored as {symbol} ({TIMEFRAME}).")
+    return len(rows)
+
+
+def main(tickers):
+    db = get_db()
+    try:
+        for ticker in tickers:
+            collect(ticker, db)
+    finally:
+        db.close()
 
 
 if __name__ == "__main__":
-    collect()
+    main(sys.argv[1:] or DEFAULT_TICKERS)

@@ -9,13 +9,42 @@ from strategies import STRATEGIES, backtest as run_strategy, run_signal, sig_sma
 load_dotenv(os.path.join(os.path.dirname(__file__), "..", "collector", ".env"))
 
 
-def load_candles(exchange="yahoo", symbol="BTC/USD", timeframe="1h"):
-    db = mysql.connector.connect(
+def _connect():
+    return mysql.connector.connect(
         host=os.getenv("DB_HOST"),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
         database=os.getenv("DB_NAME"),
     )
+
+
+def list_datasets():
+    """Every exchange / symbol / timeframe stored in the database, with its size and date range."""
+    db = _connect()
+    cur = db.cursor()
+    cur.execute(
+        """SELECT exchange, symbol, timeframe, COUNT(*), MIN(ts), MAX(ts)
+           FROM candles GROUP BY exchange, symbol, timeframe
+           ORDER BY symbol, exchange, timeframe"""
+    )
+    rows = cur.fetchall()
+    cur.close()
+    db.close()
+    return [
+        {
+            "exchange": e,
+            "symbol": sym,
+            "timeframe": tf,
+            "candles": int(n),
+            "start": pd.to_datetime(int(lo), unit="ms").strftime("%Y-%m-%d"),
+            "end": pd.to_datetime(int(hi), unit="ms").strftime("%Y-%m-%d"),
+        }
+        for e, sym, tf, n, lo, hi in rows
+    ]
+
+
+def load_candles(exchange="yahoo", symbol="BTC/USD", timeframe="1h"):
+    db = _connect()
     cur = db.cursor()
     cur.execute(
         """SELECT ts, open, high, low, close, volume FROM candles

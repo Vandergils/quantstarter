@@ -106,6 +106,11 @@
       <section class="panel" aria-labelledby="strat-h">
         <h2 id="strat-h">Strategy</h2>
         <div class="field">
+          <label for="dataset">Data</label>
+          <select id="dataset"></select>
+          <p id="datasetHint" class="hint"></p>
+        </div>
+        <div class="field">
           <label for="strategy">Choose a strategy</label>
           <select id="strategy"></select>
           <p id="strategyDesc" class="hint"></p>
@@ -152,6 +157,7 @@
           <p class="hint">Tests a grid of neighbouring settings, to show whether a good result is a lone lucky spike or a broad region.</p>
         </div>
         <button id="mapBtn" type="button" class="ghost" style="margin-top:0">Draw settings map</button>
+        <button id="cmpBtn" type="button" class="ghost">Compare across assets</button>
       </section>
 
       <section class="panel" aria-labelledby="calc-h">
@@ -211,6 +217,11 @@
           </select>
         </div>
         <div id="mapBox"></div>
+      </section>
+
+      <section id="cmpPanel" class="panel" aria-labelledby="cmp-h" hidden>
+        <h2 id="cmp-h">Across assets</h2>
+        <div id="cmpBox"></div>
       </section>
     </main>
   </div>
@@ -280,6 +291,12 @@
     </section>
 
     <section class="panel">
+      <h2>Does it work on other coins?</h2>
+      <p>An idea that worked on one coin may just have been lucky there. <strong>Compare across assets</strong> runs the same strategy, with the same settings, on every coin in your database and shows the unseen result for each next to buy and hold. If it only works on one coin, be suspicious. Keep in mind that crypto coins tend to move together, so five coins are not five independent tests.</p>
+      <p>To add coins, run <code>python collector/collect_yahoo.py ETH-USD SOL-USD</code> and reload the page.</p>
+    </section>
+
+    <section class="panel">
       <h2>Mistakes that fake good results</h2>
       <ul>
         <li><strong>Look-ahead bias.</strong> Using information the strategy could not have had yet. Here every trade happens on the <em>next</em> candle to prevent it.</li>
@@ -304,6 +321,7 @@
         <li>It still works with a <strong>higher fee</strong></li>
         <li>Nearby settings give similar results on the <strong>settings map</strong>, not just one lucky value</li>
         <li>It made enough trades for the result to mean something</li>
+        <li>It also holds up on <strong>other coins</strong> (Compare across assets)</li>
       </ul>
       <p class="hint">Even when every box is ticked, a backtest only says "worth testing further", never "will make money". This is educational, not financial advice.</p>
     </section>
@@ -427,7 +445,7 @@
     $("verdict").innerHTML =
       `${where}, the strategy <span class="${toneRet(m.total_return)}">${verb(m.total_return)} ${pct(Math.abs(m.total_return))}</span>, ` +
       `while holding ${verb(m.buy_hold_return)} ${pct(Math.abs(m.buy_hold_return))}. ` +
-      (better ? "It beat holding." : "Holding did better.");
+      (better ? (m.total_return < 0 ? "It lost less than holding." : "It beat holding.") : "Holding did better.");
 
     $("tableBox").innerHTML = periodTable(data.periods);
 
@@ -605,6 +623,7 @@
     btn.disabled = true; btn.textContent = "Running...";
     try {
       renderWF(await getJSON("/walkforward", {
+        ...dataQuery(),
         strategy: $("strategy").value,
         fee: Number($("fee").value) / 100,
         folds: $("folds").value,
@@ -623,6 +642,7 @@
       ...currentParams(),
       fee: Number($("fee").value) / 100,
       holdout: $("holdout").value,
+      ...dataQuery(),
     };
   }
 
@@ -645,6 +665,7 @@
     btn.disabled = true; btn.textContent = "Searching...";
     try {
       renderOpt(await getJSON("/optimize", {
+        ...dataQuery(),
         strategy: $("strategy").value,
         fee: Number($("fee").value) / 100,
         holdout: Number($("holdout").value) || 0.3,
@@ -685,6 +706,7 @@
   $("opt").addEventListener("click", optimize);
   $("wf").addEventListener("click", walkForward);
   $("mapBtn").addEventListener("click", drawMap);
+  $("cmpBtn").addEventListener("click", compareAssets);
   $("mapMetric").addEventListener("change", renderMap);
   $("calc").addEventListener("click", calc);
 
@@ -735,7 +757,10 @@
         }).join("");
         return `<tr>${hasY ? `<th scope="row">${yv}</th>` : ""}${tds}</tr>`;
       }).join("");
-      return `<div><h3>${title}</h3><div class="tablewrap heat"><table>
+      const h = d.hold[part];
+      return `<div><h3>${title}</h3>
+        <p class="hint" style="margin:0 0 .4rem">Buy and hold in this period: return <strong class="${toneRet(h["return"])}">${pct(h["return"])}</strong>, Sharpe ${h.sharpe.toFixed(2)}</p>
+        <div class="tablewrap heat"><table>
         <thead><tr>${hasY ? `<th class="corner">${d.y.name} &darr; ${d.x.name} &rarr;</th>` : ""}${head}</tr></thead><tbody>${rows}</tbody></table></div></div>`;
     }
 
@@ -752,6 +777,14 @@
       lesson = `${pos}% of the settings had a positive Sharpe on unseen data, and the best one does not stand alone. A broad region that works is a better sign than one lucky cell. Still check fees and the walk-forward test.`;
     } else {
       lesson = `Mixed: ${pos}% of the settings were positive on unseen data. Some regions work and others do not, so be careful about trusting exact values.`;
+    }
+    // many more positive settings on one grid than the other usually means the market, not the strategy
+    const shareTrain = Math.round(s.share_positive_train * 100);
+    if (Math.abs(s.share_positive_test - s.share_positive_train) > 0.3) {
+      const better = s.share_positive_test > s.share_positive_train ? "unseen" : "training";
+      const worse = better === "unseen" ? "training" : "unseen";
+      lesson += ` Note: ${better === "unseen" ? pos : shareTrain}% of settings were positive on ${better} data but only ${better === "unseen" ? shareTrain : pos}% on ${worse} data, while holding returned ${pct(d.hold[better === "unseen" ? "test" : "train"]["return"])} in the ${better} period and ${pct(d.hold[better === "unseen" ? "train" : "test"]["return"])} in the ${worse} period. When results swing with the market like this, the market is probably doing the work, not the strategy.`;
+      warn = true;
     }
     const bestLine = `Best on training (${where(bt.x, bt.y)}): Sharpe ${bt.train_sharpe.toFixed(2)} on training, ${bt.test_sharpe.toFixed(2)} on unseen data` +
       (s.neighbors.count ? `. Its neighbours averaged ${s.neighbors.avg_test.toFixed(2)} on unseen data.` : ".");
@@ -776,6 +809,7 @@
     btn.disabled = true; btn.textContent = "Drawing...";
     try {
       const q = {
+        ...dataQuery(),
         strategy: $("strategy").value,
         ...currentParams(),
         x,
@@ -789,6 +823,107 @@
       showError(e.message);
     } finally {
       btn.disabled = false; btn.textContent = "Draw settings map";
+    }
+  }
+
+
+  // ---------- data choice ----------
+  let datasets = [];
+
+  function dataQuery() {
+    const d = datasets[Number($("dataset").value)];
+    return d ? { exchange: d.exchange, symbol: d.symbol, timeframe: d.timeframe } : {};
+  }
+
+  function showDatasetHint(hiddenCount = 0) {
+    const d = datasets[Number($("dataset").value)];
+    $("datasetHint").textContent = d
+      ? `${d.candles.toLocaleString()} hourly candles, ${d.start} to ${d.end}.` +
+        (hiddenCount ? ` ${hiddenCount} series with other timeframes are hidden, because the metrics assume hourly candles.` : "")
+      : "";
+  }
+
+  async function loadDatasets() {
+    try {
+      const all = await getJSON("/datasets");
+      datasets = all.filter((d) => d.timeframe === "1h")
+        .sort((a, b) => (b.symbol === "BTC/USD") - (a.symbol === "BTC/USD") || a.symbol.localeCompare(b.symbol));
+      if (!datasets.length) {
+        $("dataset").innerHTML = '<option value="">No hourly data yet</option>';
+        $("datasetHint").textContent = "Run a collector first (see the README).";
+        return;
+      }
+      $("dataset").innerHTML = datasets.map((d, i) => `<option value="${i}">${d.symbol} (${d.exchange})</option>`).join("");
+      const hidden = all.length - datasets.length;
+      showDatasetHint(hidden);
+      $("dataset").addEventListener("change", () => {
+        showDatasetHint(hidden);
+        // results belong to the old data, so clear them
+        $("result").hidden = true;
+        $("empty").hidden = false;
+        ["optPanel", "wfPanel", "mapPanel", "cmpPanel"].forEach((id) => { $(id).hidden = true; });
+      });
+    } catch (e) {
+      // an older API without /datasets: the API's default data is used
+    }
+  }
+
+  // ---------- compare across assets ----------
+  function renderCmp(d) {
+    const s = d.summary, n = s.assets;
+    const rows = d.assets.map((a) =>
+      `<tr><td>${a.asset}</td>
+         <td>${a.candles.toLocaleString()}</td>
+         <td class="${toneRet(a.train.total_return)}">${pct(a.train.total_return)}</td>
+         <td>${pct(a.train.buy_hold_return)}</td>
+         <td class="${toneRet(a.test.total_return)}">${pct(a.test.total_return)}</td>
+         <td>${pct(a.test.buy_hold_return)}</td>
+         <td class="${a.test.sharpe >= 0 ? "good" : "bad"}">${a.test.sharpe.toFixed(2)}</td>
+         <td>${a.test.trades}</td>
+         <td>${pct(a.test.exposure)}</td></tr>`).join("");
+
+    let lesson, warn = false;
+    if (n < 2) {
+      lesson = "Only one asset has enough data, so there is nothing to compare yet. Add more with: python collector/collect_yahoo.py ETH-USD SOL-USD";
+    } else if (s.profitable / n >= 0.6 && s.beat_hold / n >= 0.5) {
+      lesson = `It made money on ${s.profitable} of ${n} assets and beat holding on ${s.beat_hold}. Working on several coins is a better sign than working on one, but coins move together, so this is weaker evidence than it looks. Check the walk-forward test too.`;
+    } else if (s.profitable / n <= 0.34 && s.beat_hold / n >= 0.5) {
+      lesson = `It made money on only ${s.profitable} of ${n} assets, but it did better than holding on ${s.beat_hold}. That is protection, not profit: any strategy that sits in cash during a fall loses less than holding.`;
+    } else if (s.profitable / n <= 0.34) {
+      lesson = `It made money on only ${s.profitable} of ${n} assets in the unseen period, and it rarely beat holding. There is no sign here that this idea carries over from one coin to another.`;
+      warn = true;
+    } else {
+      lesson = `Mixed: it made money on ${s.profitable} of ${n} assets and beat holding on ${s.beat_hold}. An idea that works on some coins and not others is hard to rely on.`;
+    }
+    const skipped = d.skipped.length
+      ? `<p class="hint">Skipped for too little data: ${d.skipped.map((x) => `${x.asset} (${x.reason})`).join(", ")}.</p>` : "";
+
+    $("cmpBox").innerHTML =
+      `<p class="verdict">With the same settings (${fmtParams(d.params)}), it made money on <span class="${s.profitable > n / 2 ? "good" : "bad"}">${s.profitable}</span> of ${n} assets in the unseen period and beat holding on <span class="${s.beat_hold > n / 2 ? "good" : "bad"}">${s.beat_hold}</span>.</p>
+       <div class="lesson ${warn ? "warn" : ""}">${lesson}</div>
+       <div class="tablewrap"><table>
+         <thead><tr><th>Asset</th><th>Candles</th><th>Train return</th><th>Train hold</th><th>Unseen return</th><th>Unseen hold</th><th>Unseen Sharpe</th><th>Trades</th><th>In market</th></tr></thead>
+         <tbody>${rows}</tbody></table></div>
+       ${skipped}
+       <p class="hint">The same settings run on every asset, with nothing tuned per coin. The unseen part is the newest ${Math.round(d.holdout * 100)}% of each series. Average unseen Sharpe: ${s.avg_test_sharpe.toFixed(2)}. Crypto coins tend to move together, so agreement across them is weaker evidence than agreement across unrelated markets.</p>`;
+    $("cmpPanel").hidden = false;
+  }
+
+  async function compareAssets() {
+    showError("");
+    const btn = $("cmpBtn");
+    btn.disabled = true; btn.textContent = "Comparing...";
+    try {
+      renderCmp(await getJSON("/compare", {
+        strategy: $("strategy").value,
+        ...currentParams(),
+        fee: Number($("fee").value) / 100,
+        holdout: Number($("holdout").value) || 0.3,
+      }));
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      btn.disabled = false; btn.textContent = "Compare across assets";
     }
   }
 
@@ -823,6 +958,7 @@
   toyFees();
   toyDrawdown();
 
+  loadDatasets();
   init();
 </script>
 </body>
