@@ -16,8 +16,10 @@ Pick a strategy and its settings in a web dashboard. QuantStarter shows how it w
 - **Three example strategies:** moving average crossover, RSI mean reversion, and breakout
 - **Unseen test period:** the newest 30% of the data is held back, and results are shown for training and test side by side
 - **"Find best settings" optimizer:** tries many settings on the training data only, then reveals how the winner does on unseen data (an overfitting demo)
+- **Walk-forward test:** repeats the train/test routine over several sliding windows, so you can see whether an idea wins consistently or only once
 - **Plain-language results:** verdict sentence, equity chart against buy and hold, and metrics with short explanations
-- **Risk metrics:** total return, max drawdown, Sharpe, Sortino, win rate, number of trades
+- **Risk metrics:** total return, max drawdown, Sharpe, Sortino, win rate, number of trades, and time in market
+- **Learn tab:** short explanations of backtests, fees, drawdown, Sharpe and overfitting, with two small interactive calculators
 - **Position size calculator:** how much to buy so that a stop-loss costs only the percentage you chose
 - **Easy to extend:** a new strategy is one function plus one list entry
 - **Optional C++ indicators** with an automatic pandas fallback
@@ -122,6 +124,8 @@ Then open `dashboard/index.html` in your browser. With Laragon you can also use 
 2. Keep the **unseen test** on (it defaults to the last 30% of the data).
 3. Press **Run backtest** to see the equity curve and the numbers.
 4. Press **Find best settings** to see how the best setting from the training data holds up on unseen data.
+5. Press **Run walk-forward test** to repeat that over several time windows and check consistency.
+6. Open the **Learn** tab if any of the terms are new.
 
 ## How to read the results
 
@@ -140,14 +144,14 @@ A result looks promising only if it holds up when you raise the fee, change the 
 
 ### What the example results taught
 
-On hourly BTC data from November 2024 to October 2026 (0.1% fee, last 30% held back), the author found:
+On hourly BTC-USD data from November 2024 to October 2026 (0.1% fee), the author found that **none of the three example strategies showed convincing out-of-sample profit**:
 
-- The default moving average crossover lost 42% on the training period while buy and hold lost 7%.
-- The best RSI setting found on training returned +30.6% there, and then **lost 8.7%** on unseen data. That reversal is overfitting.
-- Buy and hold gained 15.7% in the test period, and no strategy beat it on return. Trend-following looked better in the test period partly because the market was rising.
-- The default RSI made hundreds of trades, and fees alone took a large share of the account.
+- **A single split looked promising, then fell apart.** With the last 30% held back, the best Breakout setting returned +14.2% against +15.7% for holding, with a much smaller drawdown (-11.0% vs -29.7%). The best RSI setting returned +30.6% on training and then **lost 8.7%** on unseen data, which is overfitting.
+- **Walk-forward was harsher.** Over five unseen windows, the moving average strategy was profitable in only one. It lost less than holding in four of them, but holding itself lost money in four of the five windows, so that is *protection, not profit*: any strategy that sits in cash during a fall loses less. Breakout and RSI also showed no evidence of profit.
+- **Fees matter.** The default RSI made hundreds of trades, and at 0.1% per trade the fees alone took a large share of the account.
+- **One test period is a small sample.** The last part of the data was a rising market, which flattered every trend-following rule. Repeating the test across windows is what exposed it.
 
-Your numbers will differ depending on when you download the data. The lessons usually stay the same.
+Your numbers will differ depending on when you download the data. The lessons usually stay the same: check unseen data, compare with buy and hold, count the trades, and look across several windows.
 
 ## The strategies
 
@@ -204,6 +208,7 @@ Tests need no database or internet. The tests for the C++ library are skipped if
 quantstarter/
 ├── README.md
 ├── CONTRIBUTING.md
+├── CHANGELOG.md
 ├── LICENSE
 ├── requirements.txt
 ├── docker-compose.yml
@@ -218,6 +223,7 @@ quantstarter/
 │   ├── strategies.py       strategies and the shared simulation
 │   ├── backtest.py         data loading and a terminal comparison
 │   ├── metrics.py          return, drawdown, Sharpe, Sortino, win rate, position size
+│   ├── walkforward.py      walk-forward test across sliding windows
 │   ├── fast.py             indicators: C++ if built, pandas otherwise
 │   ├── report.py           training vs unseen test report
 │   └── sweep.py
@@ -236,9 +242,9 @@ quantstarter/
 Ideas that would help:
 
 - More strategies (Bollinger Bands, momentum, volatility filters)
-- **Walk-forward test:** repeats the train/test routine over several time windows to check consistency
-- More assets and timeframes
-- **Learn tab:** plain-language explanations and two small calculators inside the dashboard
+- More assets and timeframes, and a comparison across coins
+- Short selling or a cash-versus-leverage option (currently long-only)
+- Slippage and a realistic cost model
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and pull requests are welcome.
 
