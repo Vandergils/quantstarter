@@ -38,10 +38,10 @@ First public release.
 ### Known limits
 
 - Long-only, one asset, hourly candles assumed for Sharpe and Sortino
-- Costs are a fee plus a flat slippage per trade (no order-size effects or delays)
+- Only the trading fee is modelled (no slippage)
 - The API allows requests from any origin, which is fine for local use only
 - The Docker setup has not been tested by the author
 
 ### Findings from the example data
 
-On hourly BTC-USD data from November 2024 to October 2026, none of the three example strategies showed convincing out-of-sample profit. See the README for details.
+On hourly BTC-USD data from November 2024 to October 2026, none of the first three example strategies (moving average, RSI, breakout) showed convincing out-of-sample profit. See the README for details.
