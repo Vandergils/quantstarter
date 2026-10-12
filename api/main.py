@@ -13,7 +13,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "engine"))
 from backtest import list_datasets, load_candles  # noqa: E402
 from compare import compare_assets  # noqa: E402
 from costs import cost_stress  # noqa: E402
-from metrics import position_size, summary  # noqa: E402
+from metrics import HOURS_PER_YEAR, periods_per_year, position_size, summary  # noqa: E402
 from strategies import STRATEGIES, backtest, slice_result  # noqa: E402
 from sensitivity import run_sensitivity  # noqa: E402
 from walkforward import run_walk_forward  # noqa: E402
@@ -29,7 +29,7 @@ app.add_middleware(
 )
 
 DISCLAIMER = "Historical simulation only. Not financial advice."
-MIN_CANDLES = 300
+MIN_CANDLES = 300  # hourly or faster; slower timeframes need 150
 
 
 # ---------- helpers ----------
@@ -64,16 +64,25 @@ def parse_params(spec: dict, query, validate: bool = True) -> dict:
     return params
 
 
-def seg_summary(seg) -> dict:
-    s = summary(seg)
+def get_ppy(timeframe: str) -> int:
+    """Candles per year for a timeframe, or a clear 400 error if it is not supported."""
+    try:
+        return periods_per_year(timeframe)
+    except ValueError as error:
+        raise HTTPException(400, str(error))
+
+
+def seg_summary(seg, ppy: int = HOURS_PER_YEAR) -> dict:
+    s = summary(seg, ppy)
     s["trades"] = int(seg["trade"].sum())
     s["exposure"] = float(seg["position"].mean())
     return {k: (v if math.isfinite(v) else 0.0) for k, v in s.items()}
 
 
 def get_data(exchange: str, symbol: str, timeframe: str):
+    minimum = MIN_CANDLES if get_ppy(timeframe) >= HOURS_PER_YEAR else 150
     data = load_candles(exchange, symbol, timeframe)
-    if len(data) < MIN_CANDLES:
+    if len(data) < minimum:
         raise HTTPException(404, "Not enough candles in the database. Run a collector first.")
     return data
 
@@ -118,6 +127,7 @@ def run_backtest(
     spec = get_spec(strategy)
     params = parse_params(spec, request.query_params)
     data = get_data(exchange, symbol, timeframe)
+    ppy = get_ppy(timeframe)
 
     result = backtest(data, strategy, params, fee)
     n = len(result)
@@ -139,7 +149,7 @@ def run_backtest(
                 "start": seg.index[0].isoformat()[:10],
                 "end": seg.index[-1].isoformat()[:10],
                 "candles": len(seg),
-                "metrics": seg_summary(seg),
+                "metrics": seg_summary(seg, ppy),
             }
         )
 
@@ -182,6 +192,7 @@ def optimize(
     fee = total_cost(fee, slippage)
     spec = get_spec(strategy)
     data = get_data(exchange, symbol, timeframe)
+    ppy = get_ppy(timeframe)
     n = len(data)
     cut = int(n * (1 - holdout))
 
@@ -195,8 +206,8 @@ def optimize(
         combos.append(
             {
                 "params": params,
-                "train": seg_summary(slice_result(result, 0, cut)),
-                "test": seg_summary(slice_result(result, cut, n)),
+                "train": seg_summary(slice_result(result, 0, cut), ppy),
+                "test": seg_summary(slice_result(result, cut, n), ppy),
             }
         )
 
@@ -229,7 +240,7 @@ def walkforward(
     get_spec(strategy)
     data = get_data(exchange, symbol, timeframe)
     try:
-        result = run_walk_forward(data, strategy, fee, folds)
+        result = run_walk_forward(data, strategy, fee, folds, timeframe)
     except ValueError as error:
         raise HTTPException(400, str(error))
     return {**result, "disclaimer": DISCLAIMER}
@@ -260,7 +271,7 @@ def sensitivity(
     fixed = parse_params(spec, request.query_params, validate=False)
     data = get_data(exchange, symbol, timeframe)
     try:
-        result = run_sensitivity(data, strategy, x, y, fixed, fee, holdout, count)
+        result = run_sensitivity(data, strategy, x, y, fixed, fee, holdout, count, timeframe)
     except ValueError as error:
         raise HTTPException(400, str(error))
     return {**result, "disclaimer": DISCLAIMER}
@@ -296,7 +307,7 @@ def compare(
 
     data = {d["symbol"]: load_candles(d["exchange"], d["symbol"], d["timeframe"]) for d in chosen}
     try:
-        result = compare_assets(data, strategy, params, fee, holdout)
+        result = compare_assets(data, strategy, params, fee, holdout, timeframe)
     except ValueError as error:
         raise HTTPException(400, str(error))
     for row in result["assets"]:
@@ -320,7 +331,7 @@ def cost_test(
     params = parse_params(spec, request.query_params)
     data = get_data(exchange, symbol, timeframe)
     try:
-        result = cost_stress(data, strategy, params, holdout)
+        result = cost_stress(data, strategy, params, holdout, timeframe=timeframe)
     except ValueError as error:
         raise HTTPException(400, str(error))
     return {**result, "current_cost": total_cost(fee, slippage), "disclaimer": DISCLAIMER}

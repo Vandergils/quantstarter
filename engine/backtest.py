@@ -67,15 +67,24 @@ def sma_crossover(df, fast=20, slow=50, fee=0.001):
 
 
 if __name__ == "__main__":
-    from metrics import summary
+    import argparse
 
-    data = load_candles()
-    print(f"Candles: {len(data)}\n")
+    from metrics import periods_per_year, summary
+
+    parser = argparse.ArgumentParser(description="Every strategy with default settings, full period.")
+    parser.add_argument("--exchange", default="yahoo")
+    parser.add_argument("--symbol", default="BTC/USD")
+    parser.add_argument("--timeframe", default="1h")
+    args = parser.parse_args()
+
+    ppy = periods_per_year(args.timeframe)
+    data = load_candles(args.exchange, args.symbol, args.timeframe)
+    print(f"{args.symbol} ({args.exchange}, {args.timeframe}): {len(data)} candles\n")
 
     for key, spec in STRATEGIES.items():
         params = {p["name"]: p["default"] for p in spec["params"]}
         res = run_strategy(data, key, params, fee=0.001)
-        s = summary(res)
+        s = summary(res, ppy)
         print(
             f"{spec['label']:<26} return {s['total_return']:>8.2%}   "
             f"maxDD {s['max_drawdown']:>8.2%}   Sharpe {s['sharpe']:>5.2f}   "

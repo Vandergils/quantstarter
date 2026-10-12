@@ -1,3 +1,4 @@
+from metrics import min_segment_candles, periods_per_year
 from sensitivity import segment_numbers
 from strategies import STRATEGIES, run_signal
 
@@ -23,11 +24,14 @@ def break_even(levels, returns) -> dict:
     return {"status": "positive_throughout", "cost": levels[-1]}
 
 
-def cost_stress(data, strategy: str, params: dict, holdout: float = 0.3, levels=None) -> dict:
+def cost_stress(data, strategy: str, params: dict, holdout: float = 0.3, levels=None,
+                timeframe: str = "1h") -> dict:
     levels = list(levels or COST_LEVELS)
+    ppy = periods_per_year(timeframe)
+    min_part = min_segment_candles(timeframe)
     n = len(data)
     cut = int(n * (1 - holdout))
-    if cut < 200 or n - cut < 200:
+    if cut < min_part or n - cut < min_part:
         raise ValueError("Not enough data to split into a training and an unseen part.")
 
     # the signal does not depend on costs, so compute it once
@@ -39,13 +43,14 @@ def cost_stress(data, strategy: str, params: dict, holdout: float = 0.3, levels=
         rows.append(
             {
                 "cost": cost,
-                "train": segment_numbers(result, 0, cut),
-                "test": segment_numbers(result, cut, n),
+                "train": segment_numbers(result, 0, cut, ppy),
+                "test": segment_numbers(result, cut, n, ppy),
             }
         )
 
     return {
         "strategy": strategy,
+        "timeframe": timeframe,
         "params": params,
         "holdout": holdout,
         "rows": rows,

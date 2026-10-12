@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Hourly, 4-hour and daily candles** (15m, 30m and 2h are also supported by the metrics). `collect_yahoo.py` takes `--timeframe 1h|4h|1d`, the dashboard Data menu lists every timeframe in the database, and `engine/backtest.py` and `engine/report.py` take `--symbol` and `--timeframe`
+
+### Changed
+
+- Sharpe and Sortino are annualised with the right number of candles per year for the chosen timeframe (`periods_per_year`), instead of assuming hourly candles
+- Minimum data rules for the walk-forward test, settings map, cost test and asset comparison are lower for slower timeframes (for example daily data needs 60-candle test windows, not 300)
+
 ## 0.2.0 - 2026-10-12
 
 More ways to doubt a result: other coins, realistic costs, and a map of neighbouring settings.
@@ -44,4 +55,8 @@ First public release.
 
 ### Findings from the example data
 
+<<<<<<< HEAD
 On hourly BTC-USD data from November 2024 to October 2026, none of the first three example strategies (moving average, RSI, breakout) showed convincing out-of-sample profit. See the README for details.
+=======
+On hourly BTC-USD data from November 2024 to October 2026, none of the first three example strategies (moving average, RSI, breakout) showed convincing out-of-sample profit. See the README for details.
+>>>>>>> 745ae04 (Add timeframe-aware metrics and daily/4-hour data support)

@@ -279,7 +279,7 @@
 
     <section class="panel">
       <h2>Sharpe ratio</h2>
-      <p>Sharpe measures return <em>per unit of risk</em>, so a smooth +10% scores higher than a wild +10%. As a rough guide: below 0 means it lost money, 0 to 1 is weak, and above 1 is decent. Treat very high values (like 3 or more) with suspicion, since they are more often a bug or overfitting than a discovery. This dashboard assumes hourly candles when it scales Sharpe to a year.</p>
+      <p>Sharpe measures return <em>per unit of risk</em>, so a smooth +10% scores higher than a wild +10%. As a rough guide: below 0 means it lost money, 0 to 1 is weak, and above 1 is decent. Treat very high values (like 3 or more) with suspicion, since they are more often a bug or overfitting than a discovery. Sharpe is scaled to a year using the timeframe of the data you chose, so it is not comparable between hourly and daily data.</p>
     </section>
 
     <section class="panel">
@@ -308,6 +308,16 @@
       <h2>Does it work on other coins?</h2>
       <p>An idea that worked on one coin may just have been lucky there. <strong>Compare across assets</strong> runs the same strategy, with the same settings, on every coin in your database and shows the unseen result for each next to buy and hold. If it only works on one coin, be suspicious. Keep in mind that crypto coins tend to move together, so five coins are not five independent tests.</p>
       <p>To add coins, run <code>python collector/collect_yahoo.py ETH-USD SOL-USD</code> and reload the page.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Hourly, 4-hour or daily candles?</h2>
+      <p>The <strong>Data</strong> menu offers every timeframe you have collected. Daily candles from Yahoo go back many years, which means many more trades, more market phases (bull, bear, sideways) and a much more trustworthy test than two years of hourly data. Hourly candles show fast behaviour but cover a short span, and a short span is how a lucky result happens.</p>
+      <ul>
+        <li>Settings count <strong>candles</strong>. A slow average of 50 means 50 hours on hourly data and 50 days on daily data, so the same setting is a very different strategy.</li>
+        <li>Results are <strong>not comparable</strong> across timeframes, because each has its own number of candles per year in Sharpe and a different cost per trade impact.</li>
+        <li>To download them: <code>python collector/collect_yahoo.py BTC-USD --timeframe 1d</code></li>
+      </ul>
     </section>
 
     <section class="panel">
@@ -855,25 +865,29 @@
     return d ? { exchange: d.exchange, symbol: d.symbol, timeframe: d.timeframe } : {};
   }
 
+  const TF_LABEL = { "15m": "15-minute", "30m": "30-minute", "1h": "hourly", "2h": "2-hour", "4h": "4-hour", "1d": "daily" };
+  const TF_ORDER = ["1h", "4h", "1d", "2h", "30m", "15m"];
+
   function showDatasetHint(hiddenCount = 0) {
     const d = datasets[Number($("dataset").value)];
     $("datasetHint").textContent = d
-      ? `${d.candles.toLocaleString()} hourly candles, ${d.start} to ${d.end}.` +
-        (hiddenCount ? ` ${hiddenCount} series with other timeframes are hidden, because the metrics assume hourly candles.` : "")
+      ? `${d.candles.toLocaleString()} ${TF_LABEL[d.timeframe] || d.timeframe} candles, ${d.start} to ${d.end}. Settings are counted in candles of this size.` +
+        (hiddenCount ? ` ${hiddenCount} series with unsupported timeframes are hidden.` : "")
       : "";
   }
 
   async function loadDatasets() {
     try {
       const all = await getJSON("/datasets");
-      datasets = all.filter((d) => d.timeframe === "1h")
-        .sort((a, b) => (b.symbol === "BTC/USD") - (a.symbol === "BTC/USD") || a.symbol.localeCompare(b.symbol));
+      datasets = all.filter((d) => TF_ORDER.includes(d.timeframe))
+        .sort((a, b) => (b.symbol === "BTC/USD") - (a.symbol === "BTC/USD") || a.symbol.localeCompare(b.symbol) ||
+          TF_ORDER.indexOf(a.timeframe) - TF_ORDER.indexOf(b.timeframe));
       if (!datasets.length) {
-        $("dataset").innerHTML = '<option value="">No hourly data yet</option>';
+        $("dataset").innerHTML = '<option value="">No data yet</option>';
         $("datasetHint").textContent = "Run a collector first (see the README).";
         return;
       }
-      $("dataset").innerHTML = datasets.map((d, i) => `<option value="${i}">${d.symbol} (${d.exchange})</option>`).join("");
+      $("dataset").innerHTML = datasets.map((d, i) => `<option value="${i}">${d.symbol} ${d.timeframe} (${d.exchange})</option>`).join("");
       const hidden = all.length - datasets.length;
       showDatasetHint(hidden);
       $("dataset").addEventListener("change", () => {
@@ -925,7 +939,7 @@
          <thead><tr><th>Asset</th><th>Candles</th><th>Train return</th><th>Train hold</th><th>Unseen return</th><th>Unseen hold</th><th>Unseen Sharpe</th><th>Trades</th><th>In market</th></tr></thead>
          <tbody>${rows}</tbody></table></div>
        ${skipped}
-       <p class="hint">The same settings run on every asset, with nothing tuned per coin. The unseen part is the newest ${Math.round(d.holdout * 100)}% of each series. Average unseen Sharpe: ${s.avg_test_sharpe.toFixed(2)}. Crypto coins tend to move together, so agreement across them is weaker evidence than agreement across unrelated markets.</p>`;
+       <p class="hint">All assets are shown at the ${TF_LABEL[d.timeframe] || d.timeframe} timeframe. The same settings run on every asset, with nothing tuned per coin. The unseen part is the newest ${Math.round(d.holdout * 100)}% of each series. Average unseen Sharpe: ${s.avg_test_sharpe.toFixed(2)}. Crypto coins tend to move together, so agreement across them is weaker evidence than agreement across unrelated markets.</p>`;
     $("cmpPanel").hidden = false;
   }
 
@@ -935,6 +949,7 @@
     btn.disabled = true; btn.textContent = "Comparing...";
     try {
       renderCmp(await getJSON("/compare", {
+        timeframe: (datasets[Number($("dataset").value)] || {}).timeframe || "1h",
         strategy: $("strategy").value,
         ...currentParams(),
         fee: Number($("fee").value) / 100,

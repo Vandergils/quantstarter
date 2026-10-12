@@ -1,9 +1,9 @@
 import math
 
-from metrics import sharpe
+from metrics import HOURS_PER_YEAR, min_segment_candles, periods_per_year, sharpe
 from strategies import STRATEGIES, backtest
 
-MIN_PART_CANDLES = 200
+MIN_PART_CANDLES = 200  # hourly default; slower timeframes use min_segment_candles()
 
 
 def axis_values(param: dict, count: int = 9, include=None) -> list:
@@ -25,9 +25,9 @@ def axis_values(param: dict, count: int = 9, include=None) -> list:
     return sorted(values)
 
 
-def segment_numbers(result, start: int, end: int) -> dict:
+def segment_numbers(result, start: int, end: int, ppy: int = HOURS_PER_YEAR) -> dict:
     ret = result["strategy_ret"].iloc[start:end]
-    sh = sharpe(ret)
+    sh = sharpe(ret, ppy)
     total = float((1 + ret).prod() - 1)
     return {
         "sharpe": sh if math.isfinite(sh) else 0.0,
@@ -36,10 +36,10 @@ def segment_numbers(result, start: int, end: int) -> dict:
     }
 
 
-def _hold_numbers(data, start: int, end: int) -> dict:
+def _hold_numbers(data, start: int, end: int, ppy: int = HOURS_PER_YEAR) -> dict:
     """Buy and hold over the same period, for comparison with the grid."""
     ret = data["close"].pct_change().fillna(0).iloc[start:end]
-    sh = sharpe(ret)
+    sh = sharpe(ret, ppy)
     total = float((1 + ret).prod() - 1)
     return {
         "sharpe": sh if math.isfinite(sh) else 0.0,
@@ -51,7 +51,8 @@ def _share(cells, part):
     return sum(c[part]["sharpe"] > 0 for c in cells) / len(cells)
 
 
-def run_sensitivity(data, strategy, x_name, y_name, fixed, fee=0.001, holdout=0.3, count=9) -> dict:
+def run_sensitivity(data, strategy, x_name, y_name, fixed, fee=0.001, holdout=0.3, count=9,
+                    timeframe="1h") -> dict:
     spec = STRATEGIES[strategy]
     by_name = {p["name"]: p for p in spec["params"]}
 
@@ -60,9 +61,11 @@ def run_sensitivity(data, strategy, x_name, y_name, fixed, fee=0.001, holdout=0.
     if y_name is not None and (y_name not in by_name or y_name == x_name):
         raise ValueError("Pick two different settings for the two axes.")
 
+    ppy = periods_per_year(timeframe)
+    min_part = min_segment_candles(timeframe)
     n = len(data)
     cut = int(n * (1 - holdout))
-    if cut < MIN_PART_CANDLES or n - cut < MIN_PART_CANDLES:
+    if cut < min_part or n - cut < min_part:
         raise ValueError("Not enough data to split into a training and an unseen part.")
 
     xs = axis_values(by_name[x_name], count, fixed.get(x_name))
@@ -80,7 +83,7 @@ def run_sensitivity(data, strategy, x_name, y_name, fixed, fee=0.001, holdout=0.
             result = backtest(data, strategy, params, fee)
             cells.append(
                 {"xi": xi, "yi": yi, "x": xv, "y": yv,
-                 "train": segment_numbers(result, 0, cut), "test": segment_numbers(result, cut, n)}
+                 "train": segment_numbers(result, 0, cut, ppy), "test": segment_numbers(result, cut, n, ppy)}
             )
 
     if not cells:
@@ -97,6 +100,7 @@ def run_sensitivity(data, strategy, x_name, y_name, fixed, fee=0.001, holdout=0.
 
     return {
         "strategy": strategy,
+        "timeframe": timeframe,
         "fee": fee,
         "holdout": holdout,
         "fixed": fixed,
@@ -106,7 +110,7 @@ def run_sensitivity(data, strategy, x_name, y_name, fixed, fee=0.001, holdout=0.
             "xi": xs.index(fixed[x_name]) if fixed.get(x_name) in xs else -1,
             "yi": ys.index(fixed[y_name]) if y_name and fixed.get(y_name) in ys else (0 if not y_name else -1),
         },
-        "hold": {"train": _hold_numbers(data, 0, cut), "test": _hold_numbers(data, cut, n)},
+        "hold": {"train": _hold_numbers(data, 0, cut, ppy), "test": _hold_numbers(data, cut, n, ppy)},
         "cells": cells,
         "summary": {
             "valid": len(cells),

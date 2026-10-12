@@ -3,24 +3,29 @@ import math
 
 import pandas as pd
 
-from metrics import sharpe, summary
+from metrics import HOURS_PER_YEAR, periods_per_year, sharpe, summary
 from strategies import STRATEGIES, backtest, slice_result
 
 TRAIN_MULTIPLE = 3      # each training window is 3x as long as its test window
 MIN_TEST_CANDLES = 300  # about 12 days of hourly candles
 
 
-def fold_windows(n: int, folds: int):
+def min_test_candles(timeframe: str) -> int:
+    """300 candles for hourly or faster data, 60 for slower data such as daily candles."""
+    return MIN_TEST_CANDLES if periods_per_year(timeframe) >= HOURS_PER_YEAR else 60
+
+
+def fold_windows(n: int, folds: int, min_test: int = MIN_TEST_CANDLES):
     """Return (test_len, train_len, [(train_start, test_start, test_end), ...]).
 
     The windows end at the newest candle; a few of the oldest candles may be skipped
     when n does not divide evenly.
     """
     test_len = n // (TRAIN_MULTIPLE + folds)
-    if test_len < MIN_TEST_CANDLES:
+    if test_len < min_test:
         raise ValueError(
             f"Not enough data for {folds} folds: each test window would have only {test_len} candles "
-            f"(minimum {MIN_TEST_CANDLES}). Try fewer folds or collect more data."
+            f"(minimum {min_test}). Try fewer folds or collect more data."
         )
     train_len = TRAIN_MULTIPLE * test_len
     offset = n - (train_len + folds * test_len)
@@ -31,16 +36,18 @@ def fold_windows(n: int, folds: int):
     return test_len, train_len, windows
 
 
-def stats(seg: pd.DataFrame) -> dict:
-    s = summary(seg)
+def stats(seg: pd.DataFrame, ppy: int = HOURS_PER_YEAR) -> dict:
+    s = summary(seg, ppy)
     s["trades"] = int(seg["trade"].sum())
     s["exposure"] = float(seg["position"].mean())  # share of candles spent holding the coin
     return {k: (v if math.isfinite(v) else 0.0) for k, v in s.items()}
 
 
-def run_walk_forward(data: pd.DataFrame, strategy: str, fee: float = 0.001, folds: int = 5) -> dict:
+def run_walk_forward(data: pd.DataFrame, strategy: str, fee: float = 0.001, folds: int = 5,
+                     timeframe: str = "1h") -> dict:
     spec = STRATEGIES[strategy]
-    test_len, train_len, windows = fold_windows(len(data), folds)
+    ppy = periods_per_year(timeframe)
+    test_len, train_len, windows = fold_windows(len(data), folds, min_test_candles(timeframe))
 
     # Run every setting once over all the data. Signals only look backwards,
     # so slicing the finished result afterwards does not leak the future.
@@ -60,7 +67,7 @@ def run_walk_forward(data: pd.DataFrame, strategy: str, fee: float = 0.001, fold
         # choose the setting using the TRAINING window only
         best_i, best_sharpe = 0, -math.inf
         for i, res in enumerate(results):
-            sh = sharpe(res["strategy_ret"].iloc[a:b])
+            sh = sharpe(res["strategy_ret"].iloc[a:b], ppy)
             if sh > best_sharpe:
                 best_i, best_sharpe = i, sh
         res = results[best_i]
@@ -73,8 +80,8 @@ def run_walk_forward(data: pd.DataFrame, strategy: str, fee: float = 0.001, fold
                 "test_end": data.index[c - 1].isoformat()[:10],
                 "test_start_time": data.index[b].isoformat(),
                 "params": combos[best_i],
-                "train": stats(slice_result(res, a, b)),
-                "test": stats(slice_result(res, b, c)),
+                "train": stats(slice_result(res, a, b), ppy),
+                "test": stats(slice_result(res, b, c), ppy),
             }
         )
         pieces.append(res.iloc[b:c][["position", "market_ret", "strategy_ret", "trade"]])
@@ -90,6 +97,7 @@ def run_walk_forward(data: pd.DataFrame, strategy: str, fee: float = 0.001, fold
     tests = [f["test"] for f in fold_rows]
     return {
         "strategy": strategy,
+        "timeframe": timeframe,
         "fee": fee,
         "folds": folds,
         "train_len": train_len,
@@ -97,7 +105,7 @@ def run_walk_forward(data: pd.DataFrame, strategy: str, fee: float = 0.001, fold
         "fold_results": fold_rows,
         "stitched": {
             "candles": len(stitched),
-            "metrics": stats(stitched),
+            "metrics": stats(stitched, ppy),
             "chart": {
                 "time": [t.isoformat() for t in chart.index],
                 "equity": chart["equity"].round(4).tolist(),

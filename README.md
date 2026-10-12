@@ -17,6 +17,7 @@ Pick a strategy and its settings in a web dashboard. QuantStarter shows how it w
 - **Unseen test period:** the newest 30% of the data is held back, and results are shown for training and test side by side
 - **"Find best settings" optimizer:** tries many settings on the training data only, then reveals how the winner does on unseen data (an overfitting demo)
 - **Walk-forward test:** repeats the train/test routine over several sliding windows, so you can see whether an idea wins consistently or only once
+- **Hourly, 4-hour and daily candles:** daily data from Yahoo goes back many years, which gives far more trades and market phases to test on than two years of hourly data
 - **Several coins:** download more than one asset and pick the data in the dashboard, or run **Compare across assets** to see whether an idea holds beyond Bitcoin
 - **Realistic costs:** a slippage setting on top of the fee, and a **cost stress test** that shows how the result changes as trading costs rise and at what cost the profit disappears
 - **Settings map:** colour grids of neighbouring settings, scored on training and unseen data next to buy and hold, so a lone lucky setting (or a result that just follows the market) stands out from a broad region that works
@@ -101,17 +102,20 @@ Pick one:
 python collector/collect.py          # from an exchange via ccxt
 python collector/collect_yahoo.py                  # from Yahoo Finance (BTC-USD), no API key needed
 python collector/collect_yahoo.py ETH-USD SOL-USD  # one or more other tickers
+python collector/collect_yahoo.py BTC-USD --timeframe 1d  # daily candles, many years of history
+python collector/collect_yahoo.py BTC-USD --timeframe 4h  # 4-hour candles, built from the hourly data
 ```
 
-Some networks or regions block exchange APIs. If `collect.py` fails with a network error, `collector/test_exchanges.py` shows which exchanges your connection can reach, and `collect_yahoo.py` is the fallback. Hourly Yahoo data covers roughly the last two years.
+Some networks or regions block exchange APIs. If `collect.py` fails with a network error, `collector/test_exchanges.py` shows which exchanges your connection can reach, and `collect_yahoo.py` is the fallback. Hourly Yahoo data covers roughly the last two years (and so do 4-hour candles, which are built from it), while daily data goes back much further.
 
-The dashboard's **Data** menu lists whatever is in your database, so any ticker or exchange you collected can be chosen there (hourly candles only, because the metrics assume them). Running the collector again only adds new candles. The terminal tools (`engine/backtest.py`, `engine/report.py`) use the defaults `yahoo` and `BTC/USD`; change them in `engine/backtest.py` if you collect something else.
+The dashboard's **Data** menu lists whatever is in your database, so any ticker or exchange you collected can be chosen there together with its timeframe (15m, 30m, 1h, 2h, 4h and 1d are supported). Running the collector again only adds new candles. Strategy settings count candles, so a slow average of 50 means 50 hours on hourly data and 50 days on daily data. The terminal tools use `yahoo`, `BTC/USD` and `1h` unless you pass `--exchange`, `--symbol` or `--timeframe`.
 
 ### 6. Compare the strategies in the terminal
 
 ```bash
 python engine/backtest.py     # all strategies, default settings, full period
 python engine/report.py       # training vs unseen test, plus the optimizer's best settings
+python engine/report.py --symbol ETH/USD --timeframe 1d   # another coin or timeframe
 ```
 
 ### 7. Start the API and open the dashboard
@@ -207,7 +211,7 @@ Tests need no database or internet. The tests for the C++ library are skipped if
 
 - Results come from one asset and a limited time span, so a single test period is a small sample.
 - Costs are modelled as a fee plus a flat slippage per trade. Real trading also has order-size effects, delays and exchange downtime.
-- Sharpe and Sortino assume hourly candles (`HOURS_PER_YEAR` in `engine/metrics.py`). Use 365 for daily candles.
+- Sharpe and Sortino are scaled to a year using the timeframe of the data (`PERIODS_PER_YEAR` in `engine/metrics.py`, with a 365-day crypto year), so they are not comparable between hourly and daily data.
 - The API allows requests from any origin, which is fine for local use but should be restricted before any deployment.
 
 ## Project layout
@@ -253,7 +257,7 @@ quantstarter/
 Ideas that would help:
 
 - More strategies (Bollinger Bands, momentum, volatility filters)
-- Other timeframes (the metrics currently assume hourly candles) and non-crypto assets
+- Non-crypto assets, and exchange data for 4-hour candles with a longer history
 - Short selling or a cash-versus-leverage option (currently long-only)
 - Order-size-aware slippage (cost that grows with position size)
 

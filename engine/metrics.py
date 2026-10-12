@@ -1,7 +1,31 @@
 import numpy as np
 import pandas as pd
 
-HOURS_PER_YEAR = 24 * 365  # use 365 for daily candles
+# candles per year, for crypto that trades 24/7
+PERIODS_PER_YEAR = {
+    "15m": 4 * 24 * 365,
+    "30m": 2 * 24 * 365,
+    "1h": 24 * 365,
+    "2h": 12 * 365,
+    "4h": 6 * 365,
+    "1d": 365,
+}
+SUPPORTED_TIMEFRAMES = list(PERIODS_PER_YEAR)
+HOURS_PER_YEAR = PERIODS_PER_YEAR["1h"]  # default, and kept for older code
+
+
+def periods_per_year(timeframe: str) -> int:
+    try:
+        return PERIODS_PER_YEAR[timeframe]
+    except KeyError:
+        raise ValueError(
+            f"Unsupported timeframe '{timeframe}'. Use one of: {', '.join(SUPPORTED_TIMEFRAMES)}."
+        )
+
+
+def min_segment_candles(timeframe: str) -> int:
+    """Smallest training or test part we accept: 200 candles for hourly or faster data, 100 for slower."""
+    return 200 if periods_per_year(timeframe) >= HOURS_PER_YEAR else 100
 
 
 def max_drawdown(equity: pd.Series) -> float:
@@ -37,14 +61,14 @@ def win_rate(df: pd.DataFrame) -> float:
     return float((per_trade > 0).mean()) if len(per_trade) else 0.0
 
 
-def summary(df: pd.DataFrame) -> dict:
+def summary(df: pd.DataFrame, periods_per_year=HOURS_PER_YEAR) -> dict:
     return {
         "total_return": float(df["equity"].iloc[-1] - 1),
         "buy_hold_return": float(df["buy_hold"].iloc[-1] - 1),
         "max_drawdown": max_drawdown(df["equity"]),
         "buy_hold_max_drawdown": max_drawdown(df["buy_hold"]),
-        "sharpe": sharpe(df["strategy_ret"]),
-        "sortino": sortino(df["strategy_ret"]),
+        "sharpe": sharpe(df["strategy_ret"], periods_per_year),
+        "sortino": sortino(df["strategy_ret"], periods_per_year),
         "win_rate": win_rate(df),
     }
 
