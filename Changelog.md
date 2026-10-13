@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 - 2026-10-14
+
+Keep your results, learn the tool faster, and two more strategies to test.
 
 ### Added
 
 - **Two new strategies,** each with a long and a short side: **Momentum** (hold while the price is above where it was N candles ago) and **Trend, calm markets only** (a trend rule that stands aside when volatility is far above normal, with a decimal volatility-limit setting)
-
 - **Export:** CSV and JSON download buttons on every result panel (backtest, optimizer, walk-forward, settings map, asset comparison, cost stress test). Files carry the settings that produced them, are created in the browser, and need no server changes
 - **Beginner walkthrough** in `docs/GETTING_STARTED.md`, linked from the README
 

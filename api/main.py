@@ -18,7 +18,7 @@ from strategies import MODES, STRATEGIES, backtest, slice_result  # noqa: E402
 from sensitivity import run_sensitivity  # noqa: E402
 from walkforward import run_walk_forward  # noqa: E402
 
-app = FastAPI(title="QuantStarter API", version="0.3.0")
+app = FastAPI(title="QuantStarter API", version="0.4.0")
 
 # allow the dashboard (a different origin) to call the API
 app.add_middleware(
