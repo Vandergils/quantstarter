@@ -11,6 +11,8 @@ Pick a strategy and its settings in a web dashboard. QuantStarter shows how it w
 
 > **Educational use only.** Backtests are simulations on historical data. Past results do not predict future results. Nothing here is financial advice.
 
+**New here?** Follow the step-by-step walkthrough in [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md). It goes from an empty computer to your first result, and includes fixes for the most common setup problems.
+
 ## Features
 
 - **Four example strategies:** moving average crossover, RSI mean reversion, breakout, and Bollinger Bands
@@ -251,7 +253,9 @@ quantstarter/
 │   └── benchmark.py
 ├── api/main.py
 ├── dashboard/index.html
-├── docs/screenshot.png
+├── docs/
+│   ├── GETTING_STARTED.md
+│   └── screenshot.png
 └── tests/
 ```
 
