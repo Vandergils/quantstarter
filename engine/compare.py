@@ -11,7 +11,7 @@ def min_candles(timeframe: str) -> int:
 
 
 def compare_assets(datasets: dict, strategy: str, params: dict, fee: float = 0.001, holdout: float = 0.3,
-                   timeframe: str = "1h") -> dict:
+                   timeframe: str = "1h", mode: str = "long", short_cost: float = 0.0) -> dict:
     """`datasets` maps a label (such as "ETH/USD") to a price table with a `close` column."""
     ppy = periods_per_year(timeframe)
     minimum = min_candles(timeframe)
@@ -23,7 +23,7 @@ def compare_assets(datasets: dict, strategy: str, params: dict, fee: float = 0.0
             skipped.append({"asset": label, "reason": f"only {n} candles"})
             continue
         cut = int(n * (1 - holdout))
-        result = backtest(data, strategy, params, fee)
+        result = backtest(data, strategy, params, fee, mode, short_cost)
         rows.append(
             {
                 "asset": label,
@@ -43,6 +43,7 @@ def compare_assets(datasets: dict, strategy: str, params: dict, fee: float = 0.0
     return {
         "strategy": strategy,
         "timeframe": timeframe,
+        "mode": mode,
         "params": params,
         "fee": fee,
         "holdout": holdout,

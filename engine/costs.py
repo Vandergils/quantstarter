@@ -1,6 +1,6 @@
 from metrics import min_segment_candles, periods_per_year
 from sensitivity import segment_numbers
-from strategies import STRATEGIES, run_signal
+from strategies import build_signal, run_signal
 
 # total cost per trade (fee plus slippage), as fractions: 0%, 0.05%, 0.1% ... 1%
 COST_LEVELS = [0.0, 0.0005, 0.001, 0.0015, 0.002, 0.003, 0.005, 0.0075, 0.01]
@@ -25,7 +25,7 @@ def break_even(levels, returns) -> dict:
 
 
 def cost_stress(data, strategy: str, params: dict, holdout: float = 0.3, levels=None,
-                timeframe: str = "1h") -> dict:
+                timeframe: str = "1h", mode: str = "long", short_cost: float = 0.0) -> dict:
     levels = list(levels or COST_LEVELS)
     ppy = periods_per_year(timeframe)
     min_part = min_segment_candles(timeframe)
@@ -35,11 +35,11 @@ def cost_stress(data, strategy: str, params: dict, holdout: float = 0.3, levels=
         raise ValueError("Not enough data to split into a training and an unseen part.")
 
     # the signal does not depend on costs, so compute it once
-    signal = STRATEGIES[strategy]["func"](data, **params)
+    signal = build_signal(data, strategy, params, mode)
 
     rows = []
     for cost in levels:
-        result = run_signal(data, signal, cost)
+        result = run_signal(data, signal, cost, short_cost)
         rows.append(
             {
                 "cost": cost,
@@ -51,6 +51,7 @@ def cost_stress(data, strategy: str, params: dict, holdout: float = 0.3, levels=
     return {
         "strategy": strategy,
         "timeframe": timeframe,
+        "mode": mode,
         "params": params,
         "holdout": holdout,
         "rows": rows,

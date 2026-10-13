@@ -75,15 +75,17 @@ if __name__ == "__main__":
     parser.add_argument("--exchange", default="yahoo")
     parser.add_argument("--symbol", default="BTC/USD")
     parser.add_argument("--timeframe", default="1h")
+    parser.add_argument("--mode", choices=["long", "long_short"], default="long")
+    parser.add_argument("--funding", type=float, default=0.0, help="yearly cost of holding a short, in percent")
     args = parser.parse_args()
 
     ppy = periods_per_year(args.timeframe)
     data = load_candles(args.exchange, args.symbol, args.timeframe)
-    print(f"{args.symbol} ({args.exchange}, {args.timeframe}): {len(data)} candles\n")
+    print(f"{args.symbol} ({args.exchange}, {args.timeframe}), mode: {args.mode}: {len(data)} candles\n")
 
     for key, spec in STRATEGIES.items():
         params = {p["name"]: p["default"] for p in spec["params"]}
-        res = run_strategy(data, key, params, fee=0.001)
+        res = run_strategy(data, key, params, fee=0.001, mode=args.mode, short_cost=args.funding / 100 / ppy)
         s = summary(res, ppy)
         print(
             f"{spec['label']:<26} return {s['total_return']:>8.2%}   "

@@ -18,6 +18,7 @@ Pick a strategy and its settings in a web dashboard. QuantStarter shows how it w
 - **"Find best settings" optimizer:** tries many settings on the training data only, then reveals how the winner does on unseen data (an overfitting demo)
 - **Walk-forward test:** repeats the train/test routine over several sliding windows, so you can see whether an idea wins consistently or only once
 - **Hourly, 4-hour and daily candles:** daily data from Yahoo goes back many years, which gives far more trades and market phases to test on than two years of hourly data
+- **Long and short:** strategies can also go short, to profit from falling prices, with a funding-cost setting (long only is the default)
 - **Several coins:** download more than one asset and pick the data in the dashboard, or run **Compare across assets** to see whether an idea holds beyond Bitcoin
 - **Realistic costs:** a slippage setting on top of the fee, and a **cost stress test** that shows how the result changes as trading costs rise and at what cost the profit disappears
 - **Settings map:** colour grids of neighbouring settings, scored on training and unseen data next to buy and hold, so a lone lucky setting (or a result that just follows the market) stands out from a broad region that works
@@ -135,8 +136,9 @@ Then open `dashboard/index.html` in your browser. With Laragon you can also use 
 5. Press **Run walk-forward test** to repeat that over several time windows and check consistency.
 6. Press **Draw settings map** to see whether a good result is a lone lucky spike or a broad region of settings that work.
 7. Press **Compare across assets** to run the same settings on every coin in your database.
-8. Press **Cost stress test** to see at what trading cost the profit disappears. Set **Slippage** above zero for a more realistic result in every other view.
-9. Open the **Learn** tab if any of the terms are new.
+8. Choose **Direction: Long and short** (and set a funding cost) to let strategies profit from falling prices.
+9. Press **Cost stress test** to see at what trading cost the profit disappears. Set **Slippage** above zero for a more realistic result in every other view.
+10. Open the **Learn** tab if any of the terms are new.
 
 ## How to read the results
 
@@ -166,7 +168,7 @@ Your numbers will differ depending on when you download the data. The lessons us
 
 ## The strategies
 
-All four are long-only: for each candle the strategy either holds the coin or sits in cash. Every trade happens on the **next** candle, so a strategy never uses information it could not have had yet.
+By default the strategies are long-only: for each candle the strategy either holds the coin or sits in cash. In **Long and short** mode each strategy also has a short side (the mirror image of its rules), so it can profit when prices fall. Every trade happens on the **next** candle, so a strategy never uses information it could not have had yet.
 
 | Strategy | Idea | Tends to struggle when |
 |---|---|---|
@@ -185,7 +187,7 @@ def sig_momentum(df, lookback=72):
     return (df["close"] > df["close"].shift(lookback)).astype(int)
 ```
 
-The API, optimizer and dashboard pick it up automatically. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full example and the rules (no look-ahead, integer settings, fees applied for you).
+The API, optimizer and dashboard pick it up automatically. To let it run in long and short mode, also add a short function (it returns 1 while the strategy wants to be short) as `"short_func"`. See [CONTRIBUTING.md](CONTRIBUTING.md) for the full example and the rules (no look-ahead, integer settings, fees applied for you).
 
 ## Optional: faster indicators with C++
 
@@ -209,7 +211,8 @@ Tests need no database or internet. The tests for the C++ library are skipped if
 
 ## Known limits
 
-- Results come from one asset and a limited time span, so a single test period is a small sample.
+- Results come from a limited time span, so a single test period is a small sample.
+- **Short selling is simplified.** A short is modelled as -1x exposure, charged the fee on every change of position (a flip from long to short counts as two trades) and an optional yearly funding cost. Liquidation, margin limits, borrow availability and funding rates that change over time are not modelled, so real short results can be worse. Zero funding flatters shorts.
 - Costs are modelled as a fee plus a flat slippage per trade. Real trading also has order-size effects, delays and exchange downtime.
 - Sharpe and Sortino are scaled to a year using the timeframe of the data (`PERIODS_PER_YEAR` in `engine/metrics.py`, with a 365-day crypto year), so they are not comparable between hourly and daily data.
 - The API allows requests from any origin, which is fine for local use but should be restricted before any deployment.
@@ -258,7 +261,7 @@ Ideas that would help:
 
 - More strategies (Bollinger Bands, momentum, volatility filters)
 - Non-crypto assets, and exchange data for 4-hour candles with a longer history
-- Short selling or a cash-versus-leverage option (currently long-only)
+- Leverage, position sizing, and a more realistic short model (liquidation, changing funding)
 - Order-size-aware slippage (cost that grows with position size)
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and pull requests are welcome.

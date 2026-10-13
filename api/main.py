@@ -13,8 +13,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), "..", "engine"))
 from backtest import list_datasets, load_candles  # noqa: E402
 from compare import compare_assets  # noqa: E402
 from costs import cost_stress  # noqa: E402
-from metrics import HOURS_PER_YEAR, periods_per_year, position_size, summary  # noqa: E402
-from strategies import STRATEGIES, backtest, slice_result  # noqa: E402
+from metrics import HOURS_PER_YEAR, periods_per_year, position_size, summary, time_in_market, time_short  # noqa: E402
+from strategies import MODES, STRATEGIES, backtest, slice_result  # noqa: E402
 from sensitivity import run_sensitivity  # noqa: E402
 from walkforward import run_walk_forward  # noqa: E402
 
@@ -72,10 +72,21 @@ def get_ppy(timeframe: str) -> int:
         raise HTTPException(400, str(error))
 
 
+def check_mode(mode: str) -> None:
+    if mode not in MODES:
+        raise HTTPException(400, f"Unknown mode '{mode}'. Use one of: {', '.join(MODES)}.")
+
+
+def per_candle_funding(short_cost_per_year: float, timeframe: str) -> float:
+    """Turn a yearly funding or borrow cost for shorts into the cost of one candle."""
+    return short_cost_per_year / get_ppy(timeframe)
+
+
 def seg_summary(seg, ppy: int = HOURS_PER_YEAR) -> dict:
     s = summary(seg, ppy)
     s["trades"] = int(seg["trade"].sum())
-    s["exposure"] = float(seg["position"].mean())
+    s["exposure"] = time_in_market(seg)
+    s["short_time"] = time_short(seg)
     return {k: (v if math.isfinite(v) else 0.0) for k, v in s.items()}
 
 
@@ -104,7 +115,8 @@ def datasets():
 def list_strategies():
     """Everything the dashboard needs to build its controls."""
     return {
-        key: {"label": s["label"], "description": s["description"], "params": s["params"]}
+        key: {"label": s["label"], "description": s["description"], "params": s["params"],
+              "supports_short": "short_func" in s}
         for key, s in STRATEGIES.items()
     }
 
@@ -115,12 +127,16 @@ def run_backtest(
     strategy: str = "sma",
     fee: float = Query(0.001, ge=0, le=0.05),
     slippage: float = Query(0.0, ge=0, le=0.05, description="Extra cost per trade on top of the fee."),
+    mode: str = Query("long", description="long = hold or cash. long_short = also profit from falling prices."),
+    short_cost: float = Query(0.0, ge=0, le=1.0, description="Yearly cost of holding a short (funding or borrow) as a fraction: 0.05 = 5% a year."),
     holdout: float = Query(0.3, ge=0, le=0.5, description="Share of the newest data kept as an unseen test. 0 = off."),
     exchange: str = "yahoo",
     symbol: str = "BTC/USD",
     timeframe: str = "1h",
 ):
     fee = total_cost(fee, slippage)
+    check_mode(mode)
+    funding = per_candle_funding(short_cost, timeframe)
     if 0 < holdout < 0.1:
         raise HTTPException(400, "Holdout must be 0 (off) or at least 0.1.")
 
@@ -129,7 +145,7 @@ def run_backtest(
     data = get_data(exchange, symbol, timeframe)
     ppy = get_ppy(timeframe)
 
-    result = backtest(data, strategy, params, fee)
+    result = backtest(data, strategy, params, fee, mode, funding)
     n = len(result)
 
     if holdout > 0:
@@ -159,6 +175,8 @@ def run_backtest(
 
     return {
         "strategy": strategy,
+        "mode": mode,
+        "short_cost": short_cost,
         "params": params,
         "fee": fee,
         "holdout": holdout,
@@ -179,6 +197,8 @@ def optimize(
     strategy: str = "sma",
     fee: float = Query(0.001, ge=0, le=0.05),
     slippage: float = Query(0.0, ge=0, le=0.05, description="Extra cost per trade on top of the fee."),
+    mode: str = Query("long", description="long = hold or cash. long_short = also profit from falling prices."),
+    short_cost: float = Query(0.0, ge=0, le=1.0, description="Yearly cost of holding a short (funding or borrow) as a fraction: 0.05 = 5% a year."),
     holdout: float = Query(0.3, ge=0.1, le=0.5),
     exchange: str = "yahoo",
     symbol: str = "BTC/USD",
@@ -190,6 +210,8 @@ def optimize(
     often looks much worse on data it has never seen.
     """
     fee = total_cost(fee, slippage)
+    check_mode(mode)
+    funding = per_candle_funding(short_cost, timeframe)
     spec = get_spec(strategy)
     data = get_data(exchange, symbol, timeframe)
     ppy = get_ppy(timeframe)
@@ -202,7 +224,7 @@ def optimize(
         params = dict(zip(names, values))
         if spec["validate"](params):
             continue
-        result = backtest(data, strategy, params, fee)
+        result = backtest(data, strategy, params, fee, mode, funding)
         combos.append(
             {
                 "params": params,
@@ -230,6 +252,8 @@ def walkforward(
     strategy: str = "sma",
     fee: float = Query(0.001, ge=0, le=0.05),
     slippage: float = Query(0.0, ge=0, le=0.05, description="Extra cost per trade on top of the fee."),
+    mode: str = Query("long", description="long = hold or cash. long_short = also profit from falling prices."),
+    short_cost: float = Query(0.0, ge=0, le=1.0, description="Yearly cost of holding a short (funding or borrow) as a fraction: 0.05 = 5% a year."),
     folds: int = Query(5, ge=3, le=8, description="How many train/test windows to slide through the data."),
     exchange: str = "yahoo",
     symbol: str = "BTC/USD",
@@ -237,10 +261,12 @@ def walkforward(
 ):
     """Repeat 'pick the best setting on training data, then test it on unseen data' over several windows."""
     fee = total_cost(fee, slippage)
+    check_mode(mode)
+    funding = per_candle_funding(short_cost, timeframe)
     get_spec(strategy)
     data = get_data(exchange, symbol, timeframe)
     try:
-        result = run_walk_forward(data, strategy, fee, folds, timeframe)
+        result = run_walk_forward(data, strategy, fee, folds, timeframe, mode, funding)
     except ValueError as error:
         raise HTTPException(400, str(error))
     return {**result, "disclaimer": DISCLAIMER}
@@ -254,6 +280,8 @@ def sensitivity(
     y: Optional[str] = None,
     fee: float = Query(0.001, ge=0, le=0.05),
     slippage: float = Query(0.0, ge=0, le=0.05, description="Extra cost per trade on top of the fee."),
+    mode: str = Query("long", description="long = hold or cash. long_short = also profit from falling prices."),
+    short_cost: float = Query(0.0, ge=0, le=1.0, description="Yearly cost of holding a short (funding or borrow) as a fraction: 0.05 = 5% a year."),
     holdout: float = Query(0.3, ge=0.1, le=0.5),
     count: int = Query(9, ge=4, le=12, description="How many values to try along each axis."),
     exchange: str = "yahoo",
@@ -262,6 +290,8 @@ def sensitivity(
 ):
     """Test a grid of neighbouring settings, scored on training and on unseen data."""
     fee = total_cost(fee, slippage)
+    check_mode(mode)
+    funding = per_candle_funding(short_cost, timeframe)
     spec = get_spec(strategy)
     names = [p["name"] for p in spec["params"]]
     x = x or names[0]
@@ -271,7 +301,7 @@ def sensitivity(
     fixed = parse_params(spec, request.query_params, validate=False)
     data = get_data(exchange, symbol, timeframe)
     try:
-        result = run_sensitivity(data, strategy, x, y, fixed, fee, holdout, count, timeframe)
+        result = run_sensitivity(data, strategy, x, y, fixed, fee, holdout, count, timeframe, mode, funding)
     except ValueError as error:
         raise HTTPException(400, str(error))
     return {**result, "disclaimer": DISCLAIMER}
@@ -286,11 +316,15 @@ def compare(
     strategy: str = "sma",
     fee: float = Query(0.001, ge=0, le=0.05),
     slippage: float = Query(0.0, ge=0, le=0.05, description="Extra cost per trade on top of the fee."),
+    mode: str = Query("long", description="long = hold or cash. long_short = also profit from falling prices."),
+    short_cost: float = Query(0.0, ge=0, le=1.0, description="Yearly cost of holding a short (funding or borrow) as a fraction: 0.05 = 5% a year."),
     holdout: float = Query(0.3, ge=0.1, le=0.5),
     timeframe: str = "1h",
 ):
     """Run one strategy, with the same settings, on every asset in the database."""
     fee = total_cost(fee, slippage)
+    check_mode(mode)
+    funding = per_candle_funding(short_cost, timeframe)
     spec = get_spec(strategy)
     params = parse_params(spec, request.query_params)
 
@@ -307,7 +341,7 @@ def compare(
 
     data = {d["symbol"]: load_candles(d["exchange"], d["symbol"], d["timeframe"]) for d in chosen}
     try:
-        result = compare_assets(data, strategy, params, fee, holdout, timeframe)
+        result = compare_assets(data, strategy, params, fee, holdout, timeframe, mode, funding)
     except ValueError as error:
         raise HTTPException(400, str(error))
     for row in result["assets"]:
@@ -321,6 +355,8 @@ def cost_test(
     strategy: str = "sma",
     fee: float = Query(0.001, ge=0, le=0.05),
     slippage: float = Query(0.0, ge=0, le=0.05),
+    mode: str = Query("long", description="long = hold or cash. long_short = also profit from falling prices."),
+    short_cost: float = Query(0.0, ge=0, le=1.0, description="Yearly cost of holding a short (funding or borrow) as a fraction: 0.05 = 5% a year."),
     holdout: float = Query(0.3, ge=0.1, le=0.5),
     exchange: str = "yahoo",
     symbol: str = "BTC/USD",
@@ -330,8 +366,10 @@ def cost_test(
     spec = get_spec(strategy)
     params = parse_params(spec, request.query_params)
     data = get_data(exchange, symbol, timeframe)
+    check_mode(mode)
+    funding = per_candle_funding(short_cost, timeframe)
     try:
-        result = cost_stress(data, strategy, params, holdout, timeframe=timeframe)
+        result = cost_stress(data, strategy, params, holdout, timeframe=timeframe, mode=mode, short_cost=funding)
     except ValueError as error:
         raise HTTPException(400, str(error))
     return {**result, "current_cost": total_cost(fee, slippage), "disclaimer": DISCLAIMER}

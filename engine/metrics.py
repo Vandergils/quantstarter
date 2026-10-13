@@ -51,14 +51,24 @@ def sortino(returns: pd.Series, periods_per_year=HOURS_PER_YEAR) -> float:
 
 
 def win_rate(df: pd.DataFrame) -> float:
-    """Share of completed trades that made money."""
-    trade_id = (df["position"].diff().fillna(0) > 0).cumsum()
-    in_trade = df[df["position"] == 1].copy()
-    in_trade["trade_id"] = trade_id[in_trade.index]
-    per_trade = in_trade.groupby("trade_id")["strategy_ret"].apply(
+    """Share of trades that made money. A trade is one unbroken stretch long or short."""
+    position = df["position"]
+    stretch = (position != position.shift()).cumsum()   # a new number whenever the position changes
+    active = df[position != 0]
+    per_trade = active.groupby(stretch[active.index])["strategy_ret"].apply(
         lambda r: (1 + r).prod() - 1
     )
     return float((per_trade > 0).mean()) if len(per_trade) else 0.0
+
+
+def time_in_market(df: pd.DataFrame) -> float:
+    """Share of candles spent in a position, long or short (the rest is cash)."""
+    return float(df["position"].abs().mean())
+
+
+def time_short(df: pd.DataFrame) -> float:
+    """Share of candles spent short."""
+    return float((df["position"] < 0).mean())
 
 
 def summary(df: pd.DataFrame, periods_per_year=HOURS_PER_YEAR) -> dict:

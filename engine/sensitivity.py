@@ -52,7 +52,7 @@ def _share(cells, part):
 
 
 def run_sensitivity(data, strategy, x_name, y_name, fixed, fee=0.001, holdout=0.3, count=9,
-                    timeframe="1h") -> dict:
+                    timeframe="1h", mode="long", short_cost=0.0) -> dict:
     spec = STRATEGIES[strategy]
     by_name = {p["name"]: p for p in spec["params"]}
 
@@ -80,7 +80,7 @@ def run_sensitivity(data, strategy, x_name, y_name, fixed, fee=0.001, holdout=0.
                 params[y_name] = yv
             if spec["validate"](params):
                 continue  # not a valid combination (for example fast >= slow)
-            result = backtest(data, strategy, params, fee)
+            result = backtest(data, strategy, params, fee, mode, short_cost)
             cells.append(
                 {"xi": xi, "yi": yi, "x": xv, "y": yv,
                  "train": segment_numbers(result, 0, cut, ppy), "test": segment_numbers(result, cut, n, ppy)}
@@ -101,6 +101,7 @@ def run_sensitivity(data, strategy, x_name, y_name, fixed, fee=0.001, holdout=0.
     return {
         "strategy": strategy,
         "timeframe": timeframe,
+        "mode": mode,
         "fee": fee,
         "holdout": holdout,
         "fixed": fixed,

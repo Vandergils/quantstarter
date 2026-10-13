@@ -132,6 +132,20 @@
         </div>
 
         <div class="field">
+          <label for="mode">Direction</label>
+          <select id="mode">
+            <option value="long">Long only (hold or cash)</option>
+            <option value="long_short">Long and short</option>
+          </select>
+          <p id="modeHint" class="hint"></p>
+        </div>
+        <div class="field" id="fundingField" hidden>
+          <label for="funding">Short funding cost <output id="fundingOut">0.0% a year</output></label>
+          <input id="funding" type="range" min="0" max="30" step="0.5" value="0">
+          <p class="hint">Yearly cost of holding a short. Real shorts pay funding (futures) or borrow interest (margin), which varies a lot. Zero flatters short results.</p>
+        </div>
+
+        <div class="field">
           <label for="holdout">Keep newest data as an unseen test</label>
           <select id="holdout">
             <option value="0">Off (use all data)</option>
@@ -186,6 +200,7 @@
         <div id="empty" class="empty">Choose a strategy and press Run backtest.</div>
         <div id="result" hidden>
           <p id="verdict" class="verdict"></p>
+          <p id="modeNote" class="hint" hidden></p>
           <div class="chartbox"><canvas id="chart" role="img" aria-label="Growth of 1 unit invested: strategy versus buy and hold"></canvas></div>
           <h3>Numbers</h3>
           <div id="tableBox" class="tablewrap"></div>
@@ -321,6 +336,18 @@
     </section>
 
     <section class="panel">
+      <h2>Going short</h2>
+      <p>A <strong>short</strong> is a bet that the price will fall: you borrow the coin, sell it, and buy it back later, hopefully cheaper. In <strong>Long and short</strong> mode the strategy holds the coin when it is bullish and is short when it is bearish, so it can profit in a falling market, which a long-only strategy cannot.</p>
+      <ul>
+        <li><strong>It is always in the market,</strong> so the swings are bigger, and a wrong call hurts in both directions.</li>
+        <li><strong>A short can lose more than you put in.</strong> A long can fall to zero, but a price can rise without limit.</li>
+        <li><strong>Shorts cost money to hold.</strong> Futures charge funding and margin loans charge interest. Use the funding slider, because zero flatters short results.</li>
+        <li><strong>Flipping costs two trades:</strong> closing the long and opening the short.</li>
+        <li><strong>Not modelled:</strong> liquidation when the price moves against you, margin limits, borrow availability, and funding rates that change over time. Real results can be worse than the backtest.</li>
+      </ul>
+    </section>
+
+    <section class="panel">
       <h2>Mistakes that fake good results</h2>
       <ul>
         <li><strong>Look-ahead bias.</strong> Using information the strategy could not have had yet. Here every trade happens on the <em>next</em> candle to prevent it.</li>
@@ -346,6 +373,7 @@
         <li>Nearby settings give similar results on the <strong>settings map</strong>, not just one lucky value</li>
         <li>It made enough trades for the result to mean something</li>
         <li>It also holds up on <strong>other coins</strong> (Compare across assets)</li>
+        <li>If it goes short, the result still holds with a <strong>realistic funding cost</strong></li>
       </ul>
       <p class="hint">Even when every box is ticked, a backtest only says "worth testing further", never "will make money". This is educational, not financial advice.</p>
     </section>
@@ -390,6 +418,9 @@
   function buildParams() {
     const spec = specs[$("strategy").value];
     $("strategyDesc").textContent = spec.description;
+    const shortOption = $("mode").querySelector('option[value="long_short"]');
+    shortOption.disabled = !spec.supports_short;
+    if (!spec.supports_short && $("mode").value === "long_short") { $("mode").value = "long"; updateModeUI(); }
     $("paramFields").innerHTML = spec.params.map((p) =>
       `<div class="field">
          <label for="p_${p.name}">${p.label} <output id="o_${p.name}">${p.default}</output></label>
@@ -432,9 +463,10 @@
     ["Win rate", (m) => pct(m.win_rate), () => ""],
   ];
 
-  function periodTable(periods) {
+  function periodTable(periods, mode) {
+    const list = mode === "long_short" ? [...ROWS, ["Time short", (m) => pct(m.short_time), () => ""]] : ROWS;
     const head = periods.map((p) => `<th>${p.name}<small>${p.start} to ${p.end}</small></th>`).join("");
-    const body = ROWS.map(([label, fmt, tone]) =>
+    const body = list.map(([label, fmt, tone]) =>
       `<tr><td>${label}</td>${periods.map((p) => `<td class="${tone(p.metrics)}">${fmt(p.metrics)}</td>`).join("")}</tr>`
     ).join("");
     return `<table><thead><tr><th></th>${head}</tr></thead><tbody>${body}</tbody></table>`;
@@ -472,7 +504,15 @@
       `while holding ${verb(m.buy_hold_return)} ${pct(Math.abs(m.buy_hold_return))}. ` +
       (better ? (m.total_return < 0 ? "It lost less than holding." : "It beat holding.") : "Holding did better.");
 
-    $("tableBox").innerHTML = periodTable(data.periods);
+    $("tableBox").innerHTML = periodTable(data.periods, data.mode);
+    const note = $("modeNote");
+    note.hidden = data.mode !== "long_short";
+    if (data.mode === "long_short") {
+      const f = (data.short_cost * 100).toFixed(1);
+      note.textContent = `Long and short: while the strategy is bearish it is short and profits from falling prices. Short funding cost: ${f}% a year` +
+        (data.short_cost === 0 ? " (zero flatters the result, because real shorts pay funding or borrow interest)" : "") +
+        ". Liquidation, margin and borrow limits are not modelled, and a flip from long to short counts as two trades.";
+    }
 
     const labels = data.chart.time.map((t) => t.slice(0, 10));
     const splitIdx = data.split_time ? data.chart.time.findIndex((t) => t >= data.split_time) : -1;
@@ -652,6 +692,7 @@
         strategy: $("strategy").value,
         fee: Number($("fee").value) / 100,
         slippage: Number($("slip").value) / 100,
+        ...modeQuery(),
         folds: $("folds").value,
       }));
     } catch (e) {
@@ -668,6 +709,7 @@
       ...currentParams(),
       fee: Number($("fee").value) / 100,
         slippage: Number($("slip").value) / 100,
+        ...modeQuery(),
       holdout: $("holdout").value,
       ...dataQuery(),
     };
@@ -696,6 +738,7 @@
         strategy: $("strategy").value,
         fee: Number($("fee").value) / 100,
         slippage: Number($("slip").value) / 100,
+        ...modeQuery(),
         holdout: Number($("holdout").value) || 0.3,
       }));
     } catch (e) {
@@ -844,6 +887,7 @@
         x,
         fee: Number($("fee").value) / 100,
         slippage: Number($("slip").value) / 100,
+        ...modeQuery(),
         holdout: Number($("holdout").value) || 0.3,
       };
       if (y) q.y = y;
@@ -892,10 +936,7 @@
       showDatasetHint(hidden);
       $("dataset").addEventListener("change", () => {
         showDatasetHint(hidden);
-        // results belong to the old data, so clear them
-        $("result").hidden = true;
-        $("empty").hidden = false;
-        ["optPanel", "wfPanel", "mapPanel", "cmpPanel", "costPanel"].forEach((id) => { $(id).hidden = true; });
+        clearResults(); // results belong to the old data
       });
     } catch (e) {
       // an older API without /datasets: the API's default data is used
@@ -954,6 +995,7 @@
         ...currentParams(),
         fee: Number($("fee").value) / 100,
         slippage: Number($("slip").value) / 100,
+        ...modeQuery(),
         holdout: Number($("holdout").value) || 0.3,
       }));
     } catch (e) {
@@ -1027,6 +1069,7 @@
         ...currentParams(),
         fee: Number($("fee").value) / 100,
         slippage: Number($("slip").value) / 100,
+        ...modeQuery(),
         holdout: Number($("holdout").value) || 0.3,
       }));
     } catch (e) {
@@ -1035,6 +1078,32 @@
       btn.disabled = false; btn.textContent = "Cost stress test";
     }
   }
+
+
+  // ---------- direction: long only or long and short ----------
+  const MODE_HINT = {
+    long: "Holds the coin when the strategy is bullish and sits in cash otherwise.",
+    long_short: "Also goes short: while the strategy is bearish it profits when the price falls. Shorting can lose more than you put in, and real shorts can be liquidated, which this tool does not model.",
+  };
+
+  function modeQuery() {
+    return { mode: $("mode").value, short_cost: Number($("funding").value) / 100 };
+  }
+
+  function updateModeUI() {
+    $("fundingField").hidden = $("mode").value !== "long_short";
+    $("modeHint").textContent = MODE_HINT[$("mode").value];
+  }
+
+  function clearResults() {
+    $("result").hidden = true;
+    $("empty").hidden = false;
+    ["optPanel", "wfPanel", "mapPanel", "cmpPanel", "costPanel"].forEach((id) => { $(id).hidden = true; });
+  }
+
+  $("mode").addEventListener("change", () => { updateModeUI(); clearResults(); });
+  $("funding").addEventListener("input", () => { $("fundingOut").textContent = Number($("funding").value).toFixed(1) + "% a year"; });
+  updateModeUI();
 
   // ---------- tabs ----------
   function showTab(name) {
