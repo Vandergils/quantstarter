@@ -1,11 +1,12 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 - 2026-10-13
+
+Longer history and shorting: daily and 4-hour candles, and strategies that can profit from falling prices.
 
 ### Added
 
 - **Long and short mode:** every strategy has a short side, selectable with a Direction setting (`mode=long_short` in the API) and a yearly short funding cost. A flip from long to short counts as two trades, and one candle cannot lose more than the whole account
-
 - **Hourly, 4-hour and daily candles** (15m, 30m and 2h are also supported by the metrics). `collect_yahoo.py` takes `--timeframe 1h|4h|1d`, the dashboard Data menu lists every timeframe in the database, and `engine/backtest.py` and `engine/report.py` take `--symbol` and `--timeframe`
 
 ### Changed
