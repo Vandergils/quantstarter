@@ -84,3 +84,30 @@ def test_decimal_settings_are_declared_with_a_type():
         for p in spec["params"]:
             if isinstance(p["default"], float):
                 assert p.get("type") == "float"
+
+
+def test_momentum_follows_the_direction_of_the_recent_move():
+    from strategies import short_momentum, sig_momentum
+
+    close = [100 + i for i in range(60)] + [160 - i for i in range(60)]   # 60 candles up, 60 down
+    df = pd.DataFrame({"close": close}, index=pd.date_range("2024-01-01", periods=len(close), freq="h"))
+    long_signal = sig_momentum(df, lookback=10)
+    short_signal = short_momentum(df, lookback=10)
+    assert long_signal.iloc[30] == 1 and short_signal.iloc[30] == 0     # rising: long
+    assert long_signal.iloc[100] == 0 and short_signal.iloc[100] == 1   # falling: short
+    assert long_signal.iloc[5] == 0 and short_signal.iloc[5] == 0       # not enough history yet: flat
+
+
+def test_trend_calm_stands_aside_during_a_volatility_spike():
+    from strategies import short_trend_calm, sig_trend_calm
+
+    rng = np.random.default_rng(5)
+    returns = rng.normal(0.003, 0.0005, 400)                             # a steady, calm uptrend
+    returns[300:320] = np.where(np.arange(20) % 2 == 0, 0.06, -0.06)     # then 20 wild candles
+    close = 100 * np.cumprod(1 + returns)
+    df = pd.DataFrame({"close": close}, index=pd.date_range("2024-01-01", periods=400, freq="h"))
+
+    long_signal = sig_trend_calm(df, period=50, vol_window=20, vol_limit=1.5)
+    short_signal = short_trend_calm(df, period=50, vol_window=20, vol_limit=1.5)
+    assert long_signal.iloc[290] == 1                                    # calm uptrend: hold
+    assert long_signal.iloc[315] == 0 and short_signal.iloc[315] == 0    # spike: flat, neither long nor short

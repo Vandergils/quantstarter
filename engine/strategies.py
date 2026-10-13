@@ -74,6 +74,24 @@ def sig_bollinger(df, period=20, width=2.0):
     return _hold_until_changed(df, df["close"] < lower, df["close"] > mid)
 
 
+def sig_momentum(df, lookback=30):
+    """Hold while the price is higher than it was `lookback` candles ago."""
+    return (df["close"] > df["close"].shift(lookback)).astype(int)
+
+
+def _calm(df, vol_window, vol_limit):
+    """True while recent volatility is not far above its normal level."""
+    vol = df["close"].pct_change().rolling(vol_window).std()
+    baseline = vol.rolling(vol_window * 5).mean()
+    return vol <= vol_limit * baseline
+
+
+def sig_trend_calm(df, period=100, vol_window=20, vol_limit=1.5):
+    """Hold while the price is above its average AND the market is calm (volatility not much above normal)."""
+    trend = fast_indicators.sma(df["close"], period)
+    return ((df["close"] > trend) & _calm(df, vol_window, vol_limit)).astype(int)
+
+
 # ---------- short side: 1 means "be short", 0 means "not short" ----------
 
 def short_sma(df, fast=20, slow=50):
@@ -102,6 +120,17 @@ def short_bollinger(df, period=20, width=2.0):
     std = df["close"].rolling(period).std()
     upper = mid + width * std
     return _hold_until_changed(df, df["close"] > upper, df["close"] < mid)
+
+
+def short_momentum(df, lookback=30):
+    """Short while the price is lower than it was `lookback` candles ago."""
+    return (df["close"] < df["close"].shift(lookback)).astype(int)
+
+
+def short_trend_calm(df, period=100, vol_window=20, vol_limit=1.5):
+    """Short while the price is below its average AND the market is calm."""
+    trend = fast_indicators.sma(df["close"], period)
+    return ((df["close"] < trend) & _calm(df, vol_window, vol_limit)).astype(int)
 
 
 MODES = ("long", "long_short")
@@ -183,6 +212,35 @@ STRATEGIES = {
              "hint": "Wider bands wait for bigger drops, so there are fewer trades."},
         ],
         "grid": {"period": [10, 20, 30, 50], "width": [1.5, 2.0, 2.5, 3.0]},
+        "validate": lambda p: None,
+    },
+    "momentum": {
+        "label": "Momentum",
+        "description": "Follow the recent direction. Hold while the price is above where it was N candles ago, and short while it is below.",
+        "func": sig_momentum,
+        "short_func": short_momentum,
+        "params": [
+            {"name": "lookback", "label": "Lookback (candles)", "min": 5, "max": 400, "step": 1, "default": 30,
+             "hint": "Compare today's price with N candles ago. Longer means slower, steadier signals."},
+        ],
+        "grid": {"lookback": [10, 20, 30, 60, 120, 250]},
+        "validate": lambda p: None,
+    },
+    "trend_calm": {
+        "label": "Trend, calm markets only",
+        "description": "Trend following that stands aside when the market is unusually jumpy. Hold while the price is above its average and volatility is not far above normal.",
+        "func": sig_trend_calm,
+        "short_func": short_trend_calm,
+        "params": [
+            {"name": "period", "label": "Trend average (candles)", "min": 10, "max": 400, "step": 1, "default": 100,
+             "hint": "The price must be above this average to hold."},
+            {"name": "vol_window", "label": "Volatility window (candles)", "min": 5, "max": 60, "step": 1, "default": 20,
+             "hint": "How many candles recent jumpiness is measured over."},
+            {"name": "vol_limit", "label": "Volatility limit (x normal)", "type": "float",
+             "min": 0.5, "max": 3.0, "step": 0.1, "default": 1.5,
+             "hint": "Stand aside when volatility is above this multiple of its normal level. Lower means more time in cash."},
+        ],
+        "grid": {"period": [50, 100, 200], "vol_window": [10, 20, 30], "vol_limit": [1.0, 1.5, 2.0, 3.0]},
         "validate": lambda p: None,
     },
 }
