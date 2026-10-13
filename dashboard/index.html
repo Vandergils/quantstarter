@@ -85,6 +85,8 @@
   .heat td.best { outline: 3px solid var(--ink); outline-offset: -3px; font-weight: 700; }
   .heat td.cur { box-shadow: inset 0 0 0 3px #fff, inset 0 0 0 5px var(--focus); }
   tr.cur-row td { background: #f3f6f9; font-weight: 600; }
+  .exportbar { margin: .9rem 0 0; font-size: .82rem; color: var(--muted); }
+  .exportbar button { width: auto; padding: .25rem .7rem; font-size: .8rem; margin-left: .4rem; background: transparent; color: var(--strategy); }
 </style>
 </head>
 <body>
@@ -543,6 +545,7 @@
       },
     });
 
+    addExport("backtest", "tableBox", data);
     $("empty").hidden = true;
     $("result").hidden = false;
   }
@@ -584,6 +587,7 @@
          <tbody>${rows}</tbody></table></div>
        <p style="margin-top:.9rem"><button id="apply" type="button" class="small">Use the best settings above</button></p>`;
     $("apply").addEventListener("click", () => { setParams(lastBest); run(); });
+    addExport("optimize", "optBox", d);
     $("optPanel").hidden = false;
   }
 
@@ -679,6 +683,7 @@
         },
       },
     });
+    addExport("walkforward", "wfBox", d);
     $("wfPanel").hidden = false;
   }
 
@@ -868,6 +873,7 @@
        <div class="lesson ${warn ? "warn" : ""}">${lesson}<br>${bestLine}</div>
        <div class="heatgrid">${grid("train", "Training")}${grid("test", "Unseen test")}</div>
        <p class="hint">${d.x.label} runs left to right${hasY ? `, ${d.y.label} runs top to bottom` : ""}. Values are spaced evenly across each setting's range.${held ? ` Other settings held at: ${held}.` : ""} Cost per trade (fee plus slippage) ${(d.fee * 100).toFixed(2)}%.</p>`;
+    addExport("map", "mapBox", d);
     $("mapPanel").hidden = false;
   }
 
@@ -981,6 +987,7 @@
          <tbody>${rows}</tbody></table></div>
        ${skipped}
        <p class="hint">All assets are shown at the ${TF_LABEL[d.timeframe] || d.timeframe} timeframe. The same settings run on every asset, with nothing tuned per coin. The unseen part is the newest ${Math.round(d.holdout * 100)}% of each series. Average unseen Sharpe: ${s.avg_test_sharpe.toFixed(2)}. Crypto coins tend to move together, so agreement across them is weaker evidence than agreement across unrelated markets.</p>`;
+    addExport("compare", "cmpBox", d);
     $("cmpPanel").hidden = false;
   }
 
@@ -1055,6 +1062,7 @@
          <thead><tr><th>Cost per trade</th><th>Training return</th><th>Unseen return</th><th>Unseen Sharpe</th></tr></thead>
          <tbody>${rows}</tbody></table></div>
        <p class="hint">Same strategy and settings (${fmtParams(d.params)}), run again at each cost. It makes ${d.rows[0].test.trades} trades in the unseen period, and every trade pays the cost. ${matched ? "" : `Your current cost is ${fmtC(cur)}. `}Spot exchange fees are often around 0.1% per trade, and slippage depends on order size and liquidity, so the right level for you may differ.</p>`;
+    addExport("cost", "costBox", d);
     $("costPanel").hidden = false;
   }
 
@@ -1104,6 +1112,126 @@
   $("mode").addEventListener("change", () => { updateModeUI(); clearResults(); });
   $("funding").addEventListener("input", () => { $("fundingOut").textContent = Number($("funding").value).toFixed(1) + "% a year"; });
   updateModeUI();
+
+
+  // ---------- export: keep and share your results ----------
+  // CSV columns ending in _pct are percentages (12.5 means 12.5%). Sharpe and Sortino are plain numbers.
+  const exportStore = {};
+
+  function snapshot() {
+    const d = datasets[Number($("dataset").value)] || {};
+    return {
+      exportedAt: new Date().toISOString(),
+      data: { exchange: d.exchange || "", symbol: d.symbol || "", timeframe: d.timeframe || "" },
+      strategy: $("strategy").value,
+      params: currentParams(),
+      feePercent: Number($("fee").value),
+      slippagePercent: Number($("slip").value),
+      direction: $("mode").value,
+      shortFundingPercentPerYear: Number($("funding").value),
+      holdout: Number($("holdout").value),
+    };
+  }
+
+  const pc = (x) => (x === null || x === undefined ? "" : Math.round(x * 1e6) / 1e4);   // fraction -> percent
+  const num = (x) => (x === null || x === undefined ? "" : Math.round(x * 1e4) / 1e4);
+  const CONTEXT_HEADER = ["exported_at", "exchange", "symbol", "timeframe", "strategy", "settings", "direction", "fee_pct", "slippage_pct", "short_funding_pct_per_year"];
+
+  function contextCells(c, symbolOverride, settingsOverride) {
+    return [c.exportedAt, c.data.exchange, symbolOverride !== undefined ? symbolOverride : c.data.symbol, c.data.timeframe, c.strategy,
+      settingsOverride !== undefined ? settingsOverride : Object.entries(c.params).map(([k, v]) => `${k}=${v}`).join(" "),
+      c.direction, c.feePercent, c.slippagePercent, c.shortFundingPercentPerYear];
+  }
+
+  function csvCell(v) {
+    if (v === null || v === undefined) return "";
+    const s = String(v);
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+  }
+
+  function toCsv(header, rows) {
+    return [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+  }
+
+  const settingText = (p) => Object.entries(p).map(([k, v]) => `${k}=${v}`).join(" ");
+  const tail = (m) => [pc(m.total_return), pc(m.buy_hold_return), pc(m.max_drawdown), pc(m.buy_hold_max_drawdown), num(m.sharpe), num(m.sortino), pc(m.win_rate), m.trades, pc(m.exposure), pc(m.short_time)];
+  const TAIL_HEADER = ["strategy_return_pct", "buy_hold_return_pct", "max_drawdown_pct", "buy_hold_max_drawdown_pct", "sharpe", "sortino", "win_rate_pct", "trades", "time_in_market_pct", "time_short_pct"];
+
+  const CSV_BUILDERS = {
+    backtest: (d, c) => ({
+      header: ["period", "start", "end", "candles", ...TAIL_HEADER],
+      rows: d.periods.map((p) => [p.name, p.start, p.end, p.candles, ...tail(p.metrics)]),
+    }),
+    walkforward: (d, c) => ({
+      settings: "(searched on each training window)",
+      header: ["window", "unseen_start", "unseen_end", "setting_chosen_on_training", "train_sharpe", ...TAIL_HEADER],
+      rows: [
+        ...d.fold_results.map((f) => [f.fold, f.test_start, f.test_end, settingText(f.params), num(f.train.sharpe), ...tail(f.test)]),
+        ["all (stitched)", d.fold_results[0].test_start, d.fold_results[d.fold_results.length - 1].test_end, "", "", ...tail(d.stitched.metrics)],
+      ],
+    }),
+    optimize: (d, c) => ({
+      settings: "(searched on training data)",
+      header: ["rank_on_training", "setting", "train_sharpe", "train_return_pct", "test_sharpe", "test_return_pct", "test_trades"],
+      rows: d.top.map((t, i) => [i + 1, settingText(t.params), num(t.train.sharpe), pc(t.train.total_return), num(t.test.sharpe), pc(t.test.total_return), t.test.trades]),
+    }),
+    map: (d, c) => ({
+      settings: `varied: ${d.x.name}${d.y.name ? " and " + d.y.name : ""}` +
+        (Object.keys(d.fixed).filter((k) => k !== d.x.name && k !== d.y.name).length
+          ? "; held at: " + Object.entries(d.fixed).filter(([k]) => k !== d.x.name && k !== d.y.name).map(([k, v]) => `${k}=${v}`).join(" ") : ""),
+      header: ["x_setting", "x_value", "y_setting", "y_value", "train_sharpe", "train_return_pct", "train_trades", "test_sharpe", "test_return_pct", "test_trades"],
+      rows: d.cells.map((k) => [d.x.name, k.x, d.y.name || "", k.y === null || k.y === undefined ? "" : k.y,
+        num(k.train.sharpe), pc(k.train["return"]), k.train.trades, num(k.test.sharpe), pc(k.test["return"]), k.test.trades]),
+    }),
+    compare: (d, c) => ({
+      header: ["asset", "candles", "start", "end", "train_return_pct", "train_buy_hold_pct", "test_return_pct", "test_buy_hold_pct", "test_sharpe", "test_trades", "test_time_in_market_pct", "test_time_short_pct"],
+      rows: d.assets.map((a) => [a.asset, a.candles, a.start, a.end, pc(a.train.total_return), pc(a.train.buy_hold_return), pc(a.test.total_return),
+        pc(a.test.buy_hold_return), num(a.test.sharpe), a.test.trades, pc(a.test.exposure), pc(a.test.short_time)]),
+      symbol: "(all assets)",
+    }),
+    cost: (d, c) => ({
+      header: ["cost_per_trade_pct", "train_return_pct", "test_return_pct", "test_sharpe", "test_trades"],
+      rows: d.rows.map((r) => [pc(r.cost), pc(r.train["return"]), pc(r.test["return"]), num(r.test.sharpe), r.test.trades]),
+    }),
+  };
+
+  function addExport(kind, boxId, data) {
+    // keep the settings from when the result was produced, even if the result is redrawn later
+    if (!(exportStore[kind] && exportStore[kind].data === data)) exportStore[kind] = { context: snapshot(), data };
+    $(boxId).insertAdjacentHTML("beforeend",
+      `<p class="exportbar">Download these results:
+         <button type="button" data-export="${kind}:csv">CSV</button>
+         <button type="button" data-export="${kind}:json">JSON</button></p>`);
+  }
+
+  function download(filename, text, type) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  function runExport(kind, format) {
+    const item = exportStore[kind];
+    if (!item) return;
+    const c = item.context;
+    const stamp = c.exportedAt.slice(0, 16).replace(/[-:T]/g, "").replace(/^(\d{8})(\d{4})$/, "$1-$2");
+    const symbol = (c.data.symbol || "data").replace(/[^A-Za-z0-9]+/g, "-");
+    const base = `quantstarter-${kind}-${symbol}-${c.data.timeframe || "tf"}-${c.strategy}-${stamp}`;
+    if (format === "json") {
+      download(base + ".json", JSON.stringify({ settings: c, result: item.data }, null, 2), "application/json");
+      return;
+    }
+    const built = CSV_BUILDERS[kind](item.data, c);
+    const rows = built.rows.map((r) => [...contextCells(c, built.symbol, built.settings), ...r]);
+    download(base + ".csv", toCsv([...CONTEXT_HEADER, ...built.header], rows), "text/csv");
+  }
+
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("[data-export]");
+    if (b) { const [kind, format] = b.dataset.export.split(":"); runExport(kind, format); }
+  });
 
   // ---------- tabs ----------
   function showTab(name) {

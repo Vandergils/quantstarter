@@ -20,6 +20,7 @@ Pick a strategy and its settings in a web dashboard. QuantStarter shows how it w
 - **"Find best settings" optimizer:** tries many settings on the training data only, then reveals how the winner does on unseen data (an overfitting demo)
 - **Walk-forward test:** repeats the train/test routine over several sliding windows, so you can see whether an idea wins consistently or only once
 - **Hourly, 4-hour and daily candles:** daily data from Yahoo goes back many years, which gives far more trades and market phases to test on than two years of hourly data
+- **Export:** every result has **CSV** and **JSON** download buttons, with the settings used saved alongside, so runs can be kept, compared and attached to bug reports
 - **Long and short:** strategies can also go short, to profit from falling prices, with a funding-cost setting (long only is the default)
 - **Several coins:** download more than one asset and pick the data in the dashboard, or run **Compare across assets** to see whether an idea holds beyond Bitcoin
 - **Realistic costs:** a slippage setting on top of the fee, and a **cost stress test** that shows how the result changes as trading costs rise and at what cost the profit disappears
@@ -141,6 +142,16 @@ Then open `dashboard/index.html` in your browser. With Laragon you can also use 
 8. Choose **Direction: Long and short** (and set a funding cost) to let strategies profit from falling prices.
 9. Press **Cost stress test** to see at what trading cost the profit disappears. Set **Slippage** above zero for a more realistic result in every other view.
 10. Open the **Learn** tab if any of the terms are new.
+
+## Exporting results
+
+Every result panel ends with **Download these results: CSV, JSON**.
+
+- **JSON** holds the full result plus the settings that produced it (data, timeframe, strategy, settings, direction, fee, slippage, funding).
+- **CSV** is a tidy table with the same settings repeated in the first columns of every row, so files from different runs can simply be stacked in a spreadsheet and compared.
+- Columns ending in `_pct` are percentages (`12.5` means 12.5%). Sharpe and Sortino are plain numbers.
+- For the optimizer, walk-forward test and settings map, the `settings` column says what was searched or varied, because those tools choose settings themselves.
+- Files are created in your browser. Nothing is uploaded anywhere.
 
 ## How to read the results
 

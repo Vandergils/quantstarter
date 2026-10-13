@@ -105,6 +105,7 @@ Leave that terminal running. Then open `dashboard/index.html` in your browser (o
 4. Press **Find best settings** and see whether the winner on the training data holds up on the unseen data.
 5. Press **Run walk-forward test**, **Draw settings map**, **Compare across assets** and **Cost stress test**, one after another.
 6. Switch **Direction** to **Long and short**, set a funding cost, and run it again.
+7. Use **Download these results** (CSV or JSON) under any result to keep a run. The settings are saved in the file.
 
 The **Learn** tab explains every term in plain language.
 

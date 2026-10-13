@@ -1,5 +1,12 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Export:** CSV and JSON download buttons on every result panel (backtest, optimizer, walk-forward, settings map, asset comparison, cost stress test). Files carry the settings that produced them, are created in the browser, and need no server changes
+- **Beginner walkthrough** in `docs/GETTING_STARTED.md`, linked from the README
+
 ## 0.3.0 - 2026-10-13
 
 Longer history and shorting: daily and 4-hour candles, and strategies that can profit from falling prices.
