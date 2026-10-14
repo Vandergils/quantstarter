@@ -1,6 +1,8 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 - 2026-10-14
+
+See how size changes risk: fractions of the account, leverage, and what it costs.
 
 ### Added
 
