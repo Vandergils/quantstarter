@@ -3,7 +3,7 @@ import math
 
 import pandas as pd
 
-from metrics import HOURS_PER_YEAR, periods_per_year, sharpe, summary, time_in_market, time_short
+from metrics import HOURS_PER_YEAR, account_wiped, periods_per_year, sharpe, summary, time_in_market, time_short
 from strategies import STRATEGIES, backtest, slice_result
 
 TRAIN_MULTIPLE = 3      # each training window is 3x as long as its test window
@@ -41,11 +41,13 @@ def stats(seg: pd.DataFrame, ppy: int = HOURS_PER_YEAR) -> dict:
     s["trades"] = int(seg["trade"].sum())
     s["exposure"] = time_in_market(seg)  # share of candles in a position, long or short
     s["short_time"] = time_short(seg)    # share of candles spent short
+    s["account_wiped"] = account_wiped(seg)
     return {k: (v if math.isfinite(v) else 0.0) for k, v in s.items()}
 
 
 def run_walk_forward(data: pd.DataFrame, strategy: str, fee: float = 0.001, folds: int = 5,
-                     timeframe: str = "1h", mode: str = "long", short_cost: float = 0.0) -> dict:
+                     timeframe: str = "1h", mode: str = "long", short_cost: float = 0.0,
+                     size: float = 1.0, borrow_cost: float = 0.0) -> dict:
     spec = STRATEGIES[strategy]
     ppy = periods_per_year(timeframe)
     test_len, train_len, windows = fold_windows(len(data), folds, min_test_candles(timeframe))
@@ -59,7 +61,7 @@ def run_walk_forward(data: pd.DataFrame, strategy: str, fee: float = 0.001, fold
         if spec["validate"](params):
             continue
         combos.append(params)
-        results.append(backtest(data, strategy, params, fee, mode, short_cost))
+        results.append(backtest(data, strategy, params, fee, mode, short_cost, size, borrow_cost))
     if not combos:
         raise ValueError("No valid settings to test.")
 
@@ -100,6 +102,7 @@ def run_walk_forward(data: pd.DataFrame, strategy: str, fee: float = 0.001, fold
         "strategy": strategy,
         "timeframe": timeframe,
         "mode": mode,
+        "size": size,
         "fee": fee,
         "folds": folds,
         "train_len": train_len,

@@ -148,6 +148,17 @@
         </div>
 
         <div class="field">
+          <label for="size">Position size <output id="sizeOut">1.0x</output></label>
+          <input id="size" type="range" min="0.1" max="5" step="0.1" value="1">
+          <p id="sizeHint" class="hint"></p>
+        </div>
+        <div class="field" id="borrowField" hidden>
+          <label for="borrow">Borrowing cost <output id="borrowOut">0.0% a year</output></label>
+          <input id="borrow" type="range" min="0" max="30" step="0.5" value="0">
+          <p class="hint">Yearly interest on the borrowed part (everything above 1x). Zero flatters leveraged results.</p>
+        </div>
+
+        <div class="field">
           <label for="holdout">Keep newest data as an unseen test</label>
           <select id="holdout">
             <option value="0">Off (use all data)</option>
@@ -203,6 +214,7 @@
         <div id="result" hidden>
           <p id="verdict" class="verdict"></p>
           <p id="modeNote" class="hint" hidden></p>
+          <p id="riskNote" class="hint" hidden></p>
           <div class="chartbox"><canvas id="chart" role="img" aria-label="Growth of 1 unit invested: strategy versus buy and hold"></canvas></div>
           <h3>Numbers</h3>
           <div id="tableBox" class="tablewrap"></div>
@@ -350,6 +362,19 @@
     </section>
 
     <section class="panel">
+      <h2>Position size and leverage</h2>
+      <p><strong>Position size</strong> is how much of your account is exposed to the strategy. 1x is the whole account, 0.5x is half, and 2x is <strong>leverage</strong>: twice the account, using borrowed money.</p>
+      <ul>
+        <li><strong>Size scales gains and losses together.</strong> Sharpe barely changes, but the drawdown and the chance of ruin grow quickly.</li>
+        <li><strong>Leverage has a hidden cost.</strong> Losses hurt more than equal gains help (lose 50% and you need +100%), so a strategy can end up with less at 5x than at 2x.</li>
+        <li><strong>It costs money.</strong> Fees are paid on the larger amount traded, and the borrowed part pays interest. Use the borrowing slider, because zero flatters leveraged results.</li>
+        <li><strong>Ruin is final.</strong> If the price moves against a leveraged position by as much as the whole account inside one candle, it is liquidated and nothing comes back. Real exchanges liquidate earlier than this tool, so real risk is higher.</li>
+        <li><strong>Buy and hold is never leveraged here,</strong> so compare leveraged results with care. Each part (training, unseen) is scored as a fresh account.</li>
+      </ul>
+      <p>The position size calculator on the Backtest tab answers a different question: how much to buy so that a stop-loss costs only a chosen share of the account.</p>
+    </section>
+
+    <section class="panel">
       <h2>Mistakes that fake good results</h2>
       <ul>
         <li><strong>Look-ahead bias.</strong> Using information the strategy could not have had yet. Here every trade happens on the <em>next</em> candle to prevent it.</li>
@@ -376,6 +401,7 @@
         <li>It made enough trades for the result to mean something</li>
         <li>It also holds up on <strong>other coins</strong> (Compare across assets)</li>
         <li>If it goes short, the result still holds with a <strong>realistic funding cost</strong></li>
+        <li>If it uses leverage, it still holds with a <strong>realistic borrowing cost</strong> and is never wiped out</li>
       </ul>
       <p class="hint">Even when every box is ticked, a backtest only says "worth testing further", never "will make money". This is educational, not financial advice.</p>
     </section>
@@ -465,8 +491,9 @@
     ["Win rate", (m) => pct(m.win_rate), () => ""],
   ];
 
-  function periodTable(periods, mode) {
-    const list = mode === "long_short" ? [...ROWS, ["Time short", (m) => pct(m.short_time), () => ""]] : ROWS;
+  function periodTable(periods, mode, showWipe) {
+    let list = mode === "long_short" ? [...ROWS, ["Time short", (m) => pct(m.short_time), () => ""]] : ROWS;
+    if (showWipe) list = [...list, ["Account wiped out", (m) => (m.account_wiped ? "Yes" : "No"), (m) => (m.account_wiped ? "bad" : "")]];
     const head = periods.map((p) => `<th>${p.name}<small>${p.start} to ${p.end}</small></th>`).join("");
     const body = list.map(([label, fmt, tone]) =>
       `<tr><td>${label}</td>${periods.map((p) => `<td class="${tone(p.metrics)}">${fmt(p.metrics)}</td>`).join("")}</tr>`
@@ -506,7 +533,17 @@
       `while holding ${verb(m.buy_hold_return)} ${pct(Math.abs(m.buy_hold_return))}. ` +
       (better ? (m.total_return < 0 ? "It lost less than holding." : "It beat holding.") : "Holding did better.");
 
-    $("tableBox").innerHTML = periodTable(data.periods, data.mode);
+    const wiped = data.periods.filter((p) => p.metrics.account_wiped).map((p) => p.name.toLowerCase());
+    $("tableBox").innerHTML = periodTable(data.periods, data.mode, data.size > 1 || wiped.length > 0);
+    const risk = $("riskNote");
+    risk.hidden = !(data.size !== 1 || wiped.length);
+    if (!risk.hidden) {
+      risk.innerHTML = `Position size ${data.size.toFixed(1)}x` +
+        (data.size > 1 ? `, borrowing cost ${(data.borrow_cost * 100).toFixed(1)}% a year${data.borrow_cost === 0 ? " (zero flatters the result)" : ""}` : "") +
+        `. Buy and hold is not leveraged, and each part is scored as a fresh account. ` +
+        (wiped.length ? `<strong class="bad">The account was wiped out in the ${wiped.join(" and ")} period${wiped.length > 1 ? "s" : ""}.</strong> ` : "") +
+        "Liquidation is simplified: it happens when a move inside one candle equals the whole account, while real exchanges liquidate earlier.";
+    }
     const note = $("modeNote");
     note.hidden = data.mode !== "long_short";
     if (data.mode === "long_short") {
@@ -1095,7 +1132,12 @@
   };
 
   function modeQuery() {
-    return { mode: $("mode").value, short_cost: Number($("funding").value) / 100 };
+    return {
+      mode: $("mode").value,
+      short_cost: Number($("funding").value) / 100,
+      size: Number($("size").value),
+      borrow_cost: Number($("borrow").value) / 100,
+    };
   }
 
   function updateModeUI() {
@@ -1113,6 +1155,20 @@
   $("funding").addEventListener("input", () => { $("fundingOut").textContent = Number($("funding").value).toFixed(1) + "% a year"; });
   updateModeUI();
 
+  // ---------- position size and leverage ----------
+  function updateSizeUI() {
+    const size = Number($("size").value);
+    $("sizeOut").textContent = size.toFixed(1) + "x";
+    $("borrowField").hidden = size <= 1;
+    $("sizeHint").textContent =
+      size < 1 ? "Only part of the account is exposed, so gains and losses are smaller."
+      : size === 1 ? "The whole account is exposed, with no leverage."
+      : "Leverage: gains and losses are multiplied, and a big enough move against you can wipe the account out.";
+  }
+  $("size").addEventListener("input", updateSizeUI);
+  $("borrow").addEventListener("input", () => { $("borrowOut").textContent = Number($("borrow").value).toFixed(1) + "% a year"; });
+  updateSizeUI();
+
 
   // ---------- export: keep and share your results ----------
   // CSV columns ending in _pct are percentages (12.5 means 12.5%). Sharpe and Sortino are plain numbers.
@@ -1129,18 +1185,20 @@
       slippagePercent: Number($("slip").value),
       direction: $("mode").value,
       shortFundingPercentPerYear: Number($("funding").value),
+      sizeX: Number($("size").value),
+      borrowPercentPerYear: Number($("borrow").value),
       holdout: Number($("holdout").value),
     };
   }
 
   const pc = (x) => (x === null || x === undefined ? "" : Math.round(x * 1e6) / 1e4);   // fraction -> percent
   const num = (x) => (x === null || x === undefined ? "" : Math.round(x * 1e4) / 1e4);
-  const CONTEXT_HEADER = ["exported_at", "exchange", "symbol", "timeframe", "strategy", "settings", "direction", "fee_pct", "slippage_pct", "short_funding_pct_per_year"];
+  const CONTEXT_HEADER = ["exported_at", "exchange", "symbol", "timeframe", "strategy", "settings", "direction", "fee_pct", "slippage_pct", "short_funding_pct_per_year", "size_x", "borrow_pct_per_year"];
 
   function contextCells(c, symbolOverride, settingsOverride) {
     return [c.exportedAt, c.data.exchange, symbolOverride !== undefined ? symbolOverride : c.data.symbol, c.data.timeframe, c.strategy,
       settingsOverride !== undefined ? settingsOverride : Object.entries(c.params).map(([k, v]) => `${k}=${v}`).join(" "),
-      c.direction, c.feePercent, c.slippagePercent, c.shortFundingPercentPerYear];
+      c.direction, c.feePercent, c.slippagePercent, c.shortFundingPercentPerYear, c.sizeX, c.borrowPercentPerYear];
   }
 
   function csvCell(v) {
@@ -1154,8 +1212,8 @@
   }
 
   const settingText = (p) => Object.entries(p).map(([k, v]) => `${k}=${v}`).join(" ");
-  const tail = (m) => [pc(m.total_return), pc(m.buy_hold_return), pc(m.max_drawdown), pc(m.buy_hold_max_drawdown), num(m.sharpe), num(m.sortino), pc(m.win_rate), m.trades, pc(m.exposure), pc(m.short_time)];
-  const TAIL_HEADER = ["strategy_return_pct", "buy_hold_return_pct", "max_drawdown_pct", "buy_hold_max_drawdown_pct", "sharpe", "sortino", "win_rate_pct", "trades", "time_in_market_pct", "time_short_pct"];
+  const tail = (m) => [pc(m.total_return), pc(m.buy_hold_return), pc(m.max_drawdown), pc(m.buy_hold_max_drawdown), num(m.sharpe), num(m.sortino), pc(m.win_rate), m.trades, pc(m.exposure), pc(m.short_time), m.account_wiped ? "yes" : "no"];
+  const TAIL_HEADER = ["strategy_return_pct", "buy_hold_return_pct", "max_drawdown_pct", "buy_hold_max_drawdown_pct", "sharpe", "sortino", "win_rate_pct", "trades", "time_in_market_pct", "time_short_pct", "account_wiped"];
 
   const CSV_BUILDERS = {
     backtest: (d, c) => ({

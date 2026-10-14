@@ -25,7 +25,8 @@ def break_even(levels, returns) -> dict:
 
 
 def cost_stress(data, strategy: str, params: dict, holdout: float = 0.3, levels=None,
-                timeframe: str = "1h", mode: str = "long", short_cost: float = 0.0) -> dict:
+                timeframe: str = "1h", mode: str = "long", short_cost: float = 0.0,
+                size: float = 1.0, borrow_cost: float = 0.0) -> dict:
     levels = list(levels or COST_LEVELS)
     ppy = periods_per_year(timeframe)
     min_part = min_segment_candles(timeframe)
@@ -39,7 +40,7 @@ def cost_stress(data, strategy: str, params: dict, holdout: float = 0.3, levels=
 
     rows = []
     for cost in levels:
-        result = run_signal(data, signal, cost, short_cost)
+        result = run_signal(data, signal, cost, short_cost, size, borrow_cost)
         rows.append(
             {
                 "cost": cost,
@@ -52,6 +53,7 @@ def cost_stress(data, strategy: str, params: dict, holdout: float = 0.3, levels=
         "strategy": strategy,
         "timeframe": timeframe,
         "mode": mode,
+        "size": size,
         "params": params,
         "holdout": holdout,
         "rows": rows,

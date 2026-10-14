@@ -66,6 +66,11 @@ def time_in_market(df: pd.DataFrame) -> float:
     return float(df["position"].abs().mean())
 
 
+def account_wiped(df: pd.DataFrame) -> bool:
+    """True if the account lost everything at some point (possible with leverage or shorts)."""
+    return bool((df["equity"] <= 1e-9).any())
+
+
 def time_short(df: pd.DataFrame) -> float:
     """Share of candles spent short."""
     return float((df["position"] < 0).mean())

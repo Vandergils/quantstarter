@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Position size and leverage:** a size setting (0.1x to 5x) and a yearly borrowing cost for the part above 1x, on every view and endpoint (`size` and `borrow_cost` in the API, `--size` and `--borrow` in the terminal tools). Fees scale with the amount traded, and the account is wiped out when a move inside one candle equals the whole account. Results show an "account wiped out" row and warning, and exports carry the new settings
+
+### Changed
+
+- Short funding now scales with the position size
+- Results at the default size of 1x are unchanged
+
 ## 0.4.0 - 2026-10-14
 
 Keep your results, learn the tool faster, and two more strategies to test.

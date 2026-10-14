@@ -77,6 +77,8 @@ if __name__ == "__main__":
     parser.add_argument("--timeframe", default="1h")
     parser.add_argument("--mode", choices=["long", "long_short"], default="long")
     parser.add_argument("--funding", type=float, default=0.0, help="yearly cost of holding a short, in percent")
+    parser.add_argument("--size", type=float, default=1.0, help="position size: 1 = the whole account, 2 = twice the account")
+    parser.add_argument("--borrow", type=float, default=0.0, help="yearly cost of borrowing the part above 1x, in percent")
     args = parser.parse_args()
 
     ppy = periods_per_year(args.timeframe)
@@ -85,7 +87,8 @@ if __name__ == "__main__":
 
     for key, spec in STRATEGIES.items():
         params = {p["name"]: p["default"] for p in spec["params"]}
-        res = run_strategy(data, key, params, fee=0.001, mode=args.mode, short_cost=args.funding / 100 / ppy)
+        res = run_strategy(data, key, params, fee=0.001, mode=args.mode,
+                           short_cost=args.funding / 100 / ppy, size=args.size, borrow_cost=args.borrow / 100 / ppy)
         s = summary(res, ppy)
         print(
             f"{spec['label']:<26} return {s['total_return']:>8.2%}   "

@@ -4,21 +4,39 @@ import pandas as pd
 import fast as fast_indicators  # C++ if built, pandas otherwise
 
 
-def run_signal(df: pd.DataFrame, signal: pd.Series, fee: float = 0.001, short_cost: float = 0.0) -> pd.DataFrame:
+def run_signal(df: pd.DataFrame, signal: pd.Series, fee: float = 0.001, short_cost: float = 0.0,
+               size: float = 1.0, borrow_cost: float = 0.0) -> pd.DataFrame:
     """Turn a signal into equity curves. Shared by every strategy.
 
     The signal is +1 (hold the coin), 0 (cash) or -1 (short: profit when the price falls).
-    `fee` is charged on every change of position, so flipping from long to short pays it twice.
-    `short_cost` is charged on every candle spent short (funding or borrow cost, per candle).
+    `size` is how much of the account is exposed: 1.0 is all of it, 0.5 is half, 2.0 is twice the
+    account (leverage). `fee` is charged on everything traded, so a bigger size pays more, and
+    flipping from long to short pays it twice.
+    `short_cost` is charged per candle spent short, scaled by size (funding or borrow cost).
+    `borrow_cost` is charged per candle in a position on the borrowed part (size above 1).
+    The account is wiped out if the price moves against the position, inside one candle, by as much
+    as the whole account (liquidation). Maintenance margins and partial liquidations are not modelled.
     """
     df = df.copy()
     # shift(1): act on the NEXT candle, so we never trade on information we did not have yet
     df["position"] = signal.shift(1).fillna(0)
+    exposure = df["position"] * size
     df["market_ret"] = df["close"].pct_change().fillna(0)
-    df["trade"] = df["position"].diff().abs().fillna(0)
-    df["strategy_ret"] = (
-        df["position"] * df["market_ret"] - df["trade"] * fee - (df["position"] < 0) * short_cost
-    ).clip(lower=-1.0)  # one candle cannot lose more than the whole account (liquidation is not modelled)
+    df["trade"] = df["position"].diff().abs().fillna(0)      # orders placed: a flip counts as two
+    turnover = exposure.diff().abs().fillna(0)               # how much was traded, as a share of the account
+    ret = (
+        exposure * df["market_ret"]
+        - turnover * fee
+        - (df["position"] < 0) * short_cost * size
+        - (df["position"] != 0) * borrow_cost * max(size - 1.0, 0.0)
+    )
+    if "high" in df.columns and "low" in df.columns:
+        # the worst point of the candle for the position we hold
+        previous = df["close"].shift(1)
+        adverse = np.where(df["position"] > 0, df["low"] / previous - 1,
+                           np.where(df["position"] < 0, 1 - df["high"] / previous, 0.0))
+        ret = ret.mask((exposure.abs() * adverse) <= -1.0, -1.0)
+    df["strategy_ret"] = ret.clip(lower=-1.0)  # one candle cannot lose more than the whole account
     df["equity"] = (1 + df["strategy_ret"]).cumprod()
     df["buy_hold"] = (1 + df["market_ret"]).cumprod()
     return df
@@ -150,8 +168,8 @@ def build_signal(df, strategy: str, params: dict, mode: str = "long") -> pd.Seri
 
 
 def backtest(df, strategy: str, params: dict, fee: float = 0.001, mode: str = "long",
-             short_cost: float = 0.0) -> pd.DataFrame:
-    return run_signal(df, build_signal(df, strategy, params, mode), fee, short_cost)
+             short_cost: float = 0.0, size: float = 1.0, borrow_cost: float = 0.0) -> pd.DataFrame:
+    return run_signal(df, build_signal(df, strategy, params, mode), fee, short_cost, size, borrow_cost)
 
 
 # ---------- registry (drives the API and the dashboard) ----------

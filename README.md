@@ -21,6 +21,7 @@ Pick a strategy and its settings in a web dashboard. QuantStarter shows how it w
 - **Walk-forward test:** repeats the train/test routine over several sliding windows, so you can see whether an idea wins consistently or only once
 - **Hourly, 4-hour and daily candles:** daily data from Yahoo goes back many years, which gives far more trades and market phases to test on than two years of hourly data
 - **Export:** every result has **CSV** and **JSON** download buttons, with the settings used saved alongside, so runs can be kept, compared and attached to bug reports
+- **Position size and leverage:** run a strategy at a fraction of the account or with leverage, with borrowing costs and a clear "account wiped out" warning
 - **Long and short:** strategies can also go short, to profit from falling prices, with a funding-cost setting (long only is the default)
 - **Several coins:** download more than one asset and pick the data in the dashboard, or run **Compare across assets** to see whether an idea holds beyond Bitcoin
 - **Realistic costs:** a slippage setting on top of the fee, and a **cost stress test** that shows how the result changes as trading costs rise and at what cost the profit disappears
@@ -140,14 +141,15 @@ Then open `dashboard/index.html` in your browser. With Laragon you can also use 
 6. Press **Draw settings map** to see whether a good result is a lone lucky spike or a broad region of settings that work.
 7. Press **Compare across assets** to run the same settings on every coin in your database.
 8. Choose **Direction: Long and short** (and set a funding cost) to let strategies profit from falling prices.
-9. Press **Cost stress test** to see at what trading cost the profit disappears. Set **Slippage** above zero for a more realistic result in every other view.
-10. Open the **Learn** tab if any of the terms are new.
+9. Change **Position size** (above 1x is leverage, with a borrowing cost) to see how size changes the drawdown and the risk of being wiped out.
+10. Press **Cost stress test** to see at what trading cost the profit disappears. Set **Slippage** above zero for a more realistic result in every other view.
+11. Open the **Learn** tab if any of the terms are new.
 
 ## Exporting results
 
 Every result panel ends with **Download these results: CSV, JSON**.
 
-- **JSON** holds the full result plus the settings that produced it (data, timeframe, strategy, settings, direction, fee, slippage, funding).
+- **JSON** holds the full result plus the settings that produced it (data, timeframe, strategy, settings, direction, fee, slippage, funding, position size, borrowing cost).
 - **CSV** is a tidy table with the same settings repeated in the first columns of every row, so files from different runs can simply be stacked in a spreadsheet and compared.
 - Columns ending in `_pct` are percentages (`12.5` means 12.5%). Sharpe and Sortino are plain numbers.
 - For the optimizer, walk-forward test and settings map, the `settings` column says what was searched or varied, because those tools choose settings themselves.
@@ -227,6 +229,7 @@ Tests need no database or internet. The tests for the C++ library are skipped if
 ## Known limits
 
 - Results come from a limited time span, so a single test period is a small sample.
+- **Leverage is simplified.** The account is wiped out when a move inside one candle equals the whole account. Real exchanges liquidate earlier (maintenance margin), can reduce positions automatically, and charge borrowing rates that change over time. Buy and hold is not leveraged, and training and unseen parts are scored as separate fresh accounts.
 - **Short selling is simplified.** A short is modelled as -1x exposure, charged the fee on every change of position (a flip from long to short counts as two trades) and an optional yearly funding cost. Liquidation, margin limits, borrow availability and funding rates that change over time are not modelled, so real short results can be worse. Zero funding flatters shorts.
 - Costs are modelled as a fee plus a flat slippage per trade. Real trading also has order-size effects, delays and exchange downtime.
 - Sharpe and Sortino are scaled to a year using the timeframe of the data (`PERIODS_PER_YEAR` in `engine/metrics.py`, with a 365-day crypto year), so they are not comparable between hourly and daily data.
@@ -278,7 +281,7 @@ Ideas that would help:
 
 - More strategies (Bollinger Bands, momentum, volatility filters)
 - Non-crypto assets, and exchange data for 4-hour candles with a longer history
-- Leverage, position sizing, and a more realistic short model (liquidation, changing funding)
+- Volatility-based position sizing, and a more realistic margin model (maintenance margin, changing funding rates)
 - Order-size-aware slippage (cost that grows with position size)
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). Issues and pull requests are welcome.
