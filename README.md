@@ -5,6 +5,8 @@
 
 A small, beginner-friendly toolkit for testing crypto trading ideas on historical prices before risking real money.
 
+This is not financial advice. There is no proven evidence that these tools are effective as a trading method. They are intended for educational purposes and self-learning only.
+
 Pick a strategy and its settings in a web dashboard. QuantStarter shows how it would have performed compared with simply holding the coin, including trading fees and risk measures, and it checks the idea on data it was not set up on, so you can see overfitting for yourself.
 
 ![Dashboard screenshot](docs/screenshot.png)
