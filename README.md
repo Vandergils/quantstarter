@@ -51,7 +51,7 @@ Exchange / Yahoo -> collector -> MySQL (candles) -> engine -> API -> dashboard
 
 ## Requirements
 
-- Python 3.11 or newer
+- Python 3.12 or newer (the tests run on 3.12, 3.13 and 3.14)
 - MySQL 8 (or MariaDB). Easiest options: [Laragon](https://laragon.org) on Windows, or Docker on any system
 - A modern web browser
 - Optional: a C++ compiler (`g++`) for the fast indicators
@@ -220,8 +220,9 @@ If the library is not built, the pandas versions run instead and give the same n
 ## Tests
 
 ```bash
-python -m pip install pytest
-python -m pytest tests
+python -m pip install -r requirements-dev.txt
+python -m pytest
+python -m pyflakes api engine collector cpp tests   # lint
 ```
 
 Tests need no database or internet. The tests for the C++ library are skipped if it is not built. GitHub runs the tests automatically on every push.
@@ -233,7 +234,7 @@ Tests need no database or internet. The tests for the C++ library are skipped if
 - **Short selling is simplified.** A short is modelled as -1x exposure, charged the fee on every change of position (a flip from long to short counts as two trades) and an optional yearly funding cost. Liquidation, margin limits, borrow availability and funding rates that change over time are not modelled, so real short results can be worse. Zero funding flatters shorts.
 - Costs are modelled as a fee plus a flat slippage per trade. Real trading also has order-size effects, delays and exchange downtime.
 - Sharpe and Sortino are scaled to a year using the timeframe of the data (`PERIODS_PER_YEAR` in `engine/metrics.py`, with a 365-day crypto year), so they are not comparable between hourly and daily data.
-- The API allows requests from any origin, which is fine for local use but should be restricted before any deployment.
+- The API allows requests from any origin by default, which is fine for local use. To restrict it, set the `QUANTSTARTER_CORS_ORIGINS` environment variable to a comma-separated list of origins (include `null` if you open the dashboard straight from a file).
 
 ## Project layout
 
@@ -244,8 +245,13 @@ quantstarter/
 ├── CHANGELOG.md
 ├── LICENSE
 ├── requirements.txt
+├── requirements-dev.txt
+├── pytest.ini
 ├── docker-compose.yml
-├── .github/workflows/tests.yml
+├── .github/
+│   ├── workflows/tests.yml
+│   ├── ISSUE_TEMPLATE/
+│   └── pull_request_template.md
 ├── db/schema.sql
 ├── collector/
 │   ├── collect.py

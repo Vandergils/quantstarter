@@ -14,7 +14,7 @@ A dashboard in your browser where you pick a coin and a strategy, run it on past
 
 | Tool | Why | Notes |
 |---|---|---|
-| [Python 3.11 or newer](https://www.python.org/downloads/) | Runs everything | On the first installer screen, tick **Add python.exe to PATH**, then choose **Install Now** |
+| [Python 3.12 or newer](https://www.python.org/downloads/) | Runs everything | On the first installer screen, tick **Add python.exe to PATH**, then choose **Install Now** |
 | [Git](https://git-scm.com/) | Downloads the code | |
 | [Laragon](https://laragon.org) | Gives you MySQL with one click | Docker also works (see the README) |
 | [VSCode](https://code.visualstudio.com/) | Optional editor | |

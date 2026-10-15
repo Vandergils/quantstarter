@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: New here? Start with the walkthrough
+    url: https://github.com/Vandergils/quantstarter/blob/main/docs/GETTING_STARTED.md
+    about: Step-by-step setup, plus fixes for the most common problems.

@@ -9,8 +9,9 @@ git clone https://github.com/Vandergils/quantstarter.git
 cd quantstarter
 python -m venv .venv
 .venv\Scripts\activate            # Windows   (macOS/Linux: source .venv/bin/activate)
-python -m pip install -r requirements.txt pytest
-python -m pytest tests
+python -m pip install -r requirements-dev.txt
+python -m pytest
+python -m pyflakes api engine collector cpp tests
 ```
 
 The tests need no database and no internet. You only need MySQL and a data collector if you want to run the API and dashboard (see the README).
@@ -73,7 +74,7 @@ Please add a test for new behaviour. Tests that need the optional C++ library ar
 
 1. Fork the repo and create a branch (`git checkout -b add-momentum-strategy`).
 2. Keep each pull request focused on one change.
-3. Make sure `python -m pytest tests` passes. GitHub also runs it automatically.
+3. Make sure `python -m pytest` passes and `python -m pyflakes api engine collector cpp tests` is clean. GitHub runs both automatically on Linux and Windows. The pull request template has a short checklist.
 4. Describe what you changed and why. For a new strategy, include a short note on the idea behind it.
 
 ## Please do not commit

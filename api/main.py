@@ -22,10 +22,21 @@ from walkforward import run_walk_forward  # noqa: E402
 
 app = FastAPI(title="QuantStarter API", version="0.5.0")
 
+def cors_origins(value: Optional[str]) -> list:
+    """Browser origins allowed to call the API.
+
+    Everything by default, which is fine for local use. To restrict it, set the environment variable
+    QUANTSTARTER_CORS_ORIGINS to a comma-separated list. A dashboard opened straight from a file
+    has the origin "null", so include that if you still open it that way.
+    """
+    origins = [o.strip() for o in (value or "").split(",") if o.strip()]
+    return origins or ["*"]
+
+
 # allow the dashboard (a different origin) to call the API
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # fine for local development; restrict this if you deploy
+    allow_origins=cors_origins(os.getenv("QUANTSTARTER_CORS_ORIGINS")),
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -250,6 +261,9 @@ def optimize(
     combos.sort(key=lambda c: c["train"]["sharpe"], reverse=True)
     return {
         "strategy": strategy,
+        "mode": mode,
+        "size": size,
+        "fee": fee,
         "holdout": holdout,
         "tested": len(combos),
         "best": combos[0],

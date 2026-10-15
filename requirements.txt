@@ -1,8 +1,11 @@
-ccxt
-mysql-connector-python
-python-dotenv
-pandas
-numpy
-yfinance
-fastapi
-uvicorn
+# Runtime dependencies. Ranges keep a fresh install working without surprise major upgrades.
+# Developed and tested with: pandas 3.0, numpy 2.4, fastapi 0.143, uvicorn 0.54, yfinance 1.7,
+# python-dotenv 1.2, mysql-connector-python 26.7.
+ccxt>=4.0
+mysql-connector-python>=8.0
+python-dotenv>=1.0,<2
+pandas>=2.2,<4
+numpy>=1.26,<3
+yfinance>=0.2.40,<3
+fastapi>=0.110,<1
+uvicorn>=0.30,<1

@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+Maintenance: a safer install, more tests, and friendlier contributing.
+
+### Added
+
+- **API tests** (`tests/test_api.py`) that run without a database. They cover every endpoint, the new settings, and the error messages
+- `requirements-dev.txt` (test and lint tools) and `pytest.ini`
+- **Lint check** (`pyflakes`) in CI, which now installs the requirements exactly as a new user does and also runs on Python 3.14
+- Issue templates (bug report with a place for the exported JSON, feature or strategy idea) and a pull request checklist
+- `QUANTSTARTER_CORS_ORIGINS` to restrict which browser origins may call the API (everything is still allowed by default)
+
+### Changed
+
+- `requirements.txt` now has version ranges, so a fresh install does not jump to an untested major version
+- Python 3.12 or newer is the documented requirement
+- `/optimize` now reports the mode, size and fee it ran with, like the other endpoints
+
 ## 0.5.0 - 2026-10-14
 
 See how size changes risk: fractions of the account, leverage, and what it costs.
