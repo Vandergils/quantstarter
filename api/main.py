@@ -20,7 +20,7 @@ from strategies import MODES, STRATEGIES, backtest, slice_result  # noqa: E402
 from sensitivity import run_sensitivity  # noqa: E402
 from walkforward import run_walk_forward  # noqa: E402
 
-app = FastAPI(title="QuantStarter API", version="0.5.0")
+app = FastAPI(title="QuantStarter API", version="0.5.1")
 
 def cors_origins(value: Optional[str]) -> list:
     """Browser origins allowed to call the API.

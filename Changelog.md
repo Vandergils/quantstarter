@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1 - 2026-10-15
 
 Maintenance: a safer install, more tests, and friendlier contributing.
 
