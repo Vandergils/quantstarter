@@ -61,7 +61,7 @@ def load_candles(exchange="yahoo", symbol="BTC/USD", timeframe="1h"):
 
 
 def sma_crossover(df, fast=20, slow=50, fee=0.001):
-    """Kept so older scripts (like sweep.py) still work. Returns (result, number_of_trades)."""
+    """Kept so older scripts still work. Returns (result, number_of_trades)."""
     result = run_signal(df, sig_sma(df, fast, slow), fee)
     return result, int(result["trade"].sum())
 

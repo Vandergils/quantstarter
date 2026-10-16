@@ -20,7 +20,7 @@ from strategies import MODES, STRATEGIES, backtest, slice_result  # noqa: E402
 from sensitivity import run_sensitivity  # noqa: E402
 from walkforward import run_walk_forward  # noqa: E402
 
-app = FastAPI(title="QuantStarter API", version="0.5.1")
+app = FastAPI(title="QuantStarter API", version="0.5.2")
 
 def cors_origins(value: Optional[str]) -> list:
     """Browser origins allowed to call the API.
@@ -352,6 +352,7 @@ def compare(
     size: float = Query(1.0, ge=0.1, le=5.0, description="How much of the account is exposed: 1 = all of it, 0.5 = half, 2 = twice the account (leverage)."),
     borrow_cost: float = Query(0.0, ge=0, le=1.0, description="Yearly cost of borrowing the part above 1x, as a fraction: 0.08 = 8% a year."),
     holdout: float = Query(0.3, ge=0.1, le=0.5),
+    common_window: bool = Query(True, description="Compare every asset over the dates they all have, so the unseen part covers the same period for each."),
     timeframe: str = "1h",
 ):
     """Run one strategy, with the same settings, on every asset in the database."""
@@ -375,7 +376,7 @@ def compare(
 
     data = {d["symbol"]: load_candles(d["exchange"], d["symbol"], d["timeframe"]) for d in chosen}
     try:
-        result = compare_assets(data, strategy, params, fee, holdout, timeframe, mode, funding, size, borrow)
+        result = compare_assets(data, strategy, params, fee, holdout, timeframe, mode, funding, size, borrow, common_window)
     except ValueError as error:
         raise HTTPException(400, str(error))
     for row in result["assets"]:
@@ -420,4 +421,8 @@ def position_size_endpoint(
     entry: float = Query(..., gt=0),
     stop: float = Query(..., gt=0),
 ):
-    return {"units": position_size(balance, risk_pct, entry, stop)}
+    units = position_size(balance, risk_pct, entry, stop)
+    notional = units * entry
+    leverage = notional / balance
+    # with a tight stop the position can be worth more than the whole balance, which needs borrowed money
+    return {"units": units, "notional": notional, "leverage": leverage, "needs_leverage": leverage > 1.0}

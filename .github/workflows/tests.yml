@@ -5,6 +5,9 @@ on:
     branches: [main]
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ${{ matrix.os }}
@@ -38,5 +41,15 @@ jobs:
         continue-on-error: true
         run: python cpp/build.py
 
+      # Say out loud which indicators the next step uses, so a silent C++ build failure is visible.
+      - name: Report which indicators are used
+        run: python -c "import sys; sys.path.insert(0, 'engine'); import fast; print('C++ indicators loaded:', fast.using_cpp())"
+
       - name: Run tests
         run: python -m pytest -v
+
+      # The same tests again on the pandas indicators, which every user without a compiler runs.
+      - name: Run tests (pandas indicators only)
+        env:
+          QUANTSTARTER_NO_CPP: "1"
+        run: python -m pytest -q

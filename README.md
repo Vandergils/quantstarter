@@ -52,7 +52,7 @@ Exchange / Yahoo -> collector -> MySQL (candles) -> engine -> API -> dashboard
 ## Requirements
 
 - Python 3.12 or newer (the tests run on 3.12, 3.13 and 3.14)
-- MySQL 8 (or MariaDB). Easiest options: [Laragon](https://laragon.org) on Windows, or Docker on any system
+- MySQL 8.4 LTS (or MariaDB). MySQL 8.0 still works but no longer receives security fixes. Easiest options: [Laragon](https://laragon.org) on Windows, or Docker on any system
 - A modern web browser
 - Optional: a C++ compiler (`g++`) for the fast indicators
 
@@ -75,7 +75,7 @@ cd quantstarter
 docker compose up -d
 ```
 
-The database and table are created automatically from `db/schema.sql`. Change the password in `docker-compose.yml` before using it for anything beyond local testing. *The Docker setup is untested by the author. Please open an issue if it fails.*
+The database and table are created automatically from `db/schema.sql`. It is only reachable from your own computer (port 3306 on 127.0.0.1). Change the password in `docker-compose.yml` before using it for anything beyond local testing. *The Docker setup is untested by the author. Please open an issue if it fails.*
 
 ### 3. Configure the database connection
 
@@ -113,7 +113,7 @@ python collector/collect_yahoo.py BTC-USD --timeframe 4h  # 4-hour candles, buil
 
 Some networks or regions block exchange APIs. If `collect.py` fails with a network error, `collector/test_exchanges.py` shows which exchanges your connection can reach, and `collect_yahoo.py` is the fallback. Hourly Yahoo data covers roughly the last two years (and so do 4-hour candles, which are built from it), while daily data goes back much further.
 
-The dashboard's **Data** menu lists whatever is in your database, so any ticker or exchange you collected can be chosen there together with its timeframe (15m, 30m, 1h, 2h, 4h and 1d are supported). Running the collector again only adds new candles. Strategy settings count candles, so a slow average of 50 means 50 hours on hourly data and 50 days on daily data. The terminal tools use `yahoo`, `BTC/USD` and `1h` unless you pass `--exchange`, `--symbol` or `--timeframe`.
+The dashboard's **Data** menu lists whatever is in your database, so any ticker or exchange you collected can be chosen there together with its timeframe (the engine understands 15m, 30m, 1h, 2h, 4h and 1d; the bundled Yahoo collector downloads 1h, 4h and 1d). Running the collector again adds new candles and refreshes the ones you already have; a candle that is still forming is never stored. Strategy settings count candles, so a slow average of 50 means 50 hours on hourly data and 50 days on daily data. The terminal tools use `yahoo`, `BTC/USD` and `1h` unless you pass `--exchange`, `--symbol` or `--timeframe`.
 
 ### 6. Compare the strategies in the terminal
 
@@ -157,7 +157,7 @@ Every result panel ends with **Download these results: CSV, JSON**.
 
 ## How to read the results
 
-Read the **Unseen test** column first. That is the closest thing to an honest result.
+Read the **Unseen test** column first. That is the closest thing to an honest result, but only while you do not keep tuning against it: every time you look at the unseen period and then change something, it becomes a little less unseen. For a real check, leave a final slice of data untouched until the very end.
 
 | Metric | What it tells you |
 |---|---|
@@ -183,7 +183,7 @@ Your numbers will differ depending on when you download the data. The lessons us
 
 ## The strategies
 
-By default the strategies are long-only: for each candle the strategy either holds the coin or sits in cash. In **Long and short** mode each strategy also has a short side (the mirror image of its rules), so it can profit when prices fall. Every trade happens on the **next** candle, so a strategy never uses information it could not have had yet.
+By default the strategies are long-only: for each candle the strategy either holds the coin or sits in cash. In **Long and short** mode each strategy also has a short side (the mirror image of its rules), so it can profit when prices fall. A signal is computed from the close of a candle and the trade is assumed to fill at that same close, so the position earns the **next** candle's move and a strategy never uses a price from the future. Real orders fill a little later and a little worse, which is what the slippage setting is for.
 
 | Strategy | Idea | Tends to struggle when |
 |---|---|---|
@@ -231,10 +231,15 @@ Tests need no database or internet. The tests for the C++ library are skipped if
 
 - Results come from a limited time span, so a single test period is a small sample.
 - **Leverage is simplified.** The account is wiped out when a move inside one candle equals the whole account. Real exchanges liquidate earlier (maintenance margin), can reduce positions automatically, and charge borrowing rates that change over time. Buy and hold is not leveraged, and training and unseen parts are scored as separate fresh accounts.
-- **Short selling is simplified.** A short is modelled as -1x exposure, charged the fee on every change of position (a flip from long to short counts as two trades) and an optional yearly funding cost. Liquidation, margin limits, borrow availability and funding rates that change over time are not modelled, so real short results can be worse. Zero funding flatters shorts.
+- **Short selling is simplified.** A short is modelled as -1x exposure, charged the fee on every change of position (a flip from long to short counts as two trades) and an optional yearly funding cost. Liquidation, margin limits, borrow availability and funding rates that change over time are not modelled, so real short results can be worse. Funding is one flat yearly cost that you choose; on real exchanges it changes over time and can help or hurt a short depending on the market.
 - Costs are modelled as a fee plus a flat slippage per trade. Real trading also has order-size effects, delays and exchange downtime.
 - Sharpe and Sortino are scaled to a year using the timeframe of the data (`PERIODS_PER_YEAR` in `engine/metrics.py`, with a 365-day crypto year), so they are not comparable between hourly and daily data.
-- The API allows requests from any origin by default, which is fine for local use. To restrict it, set the `QUANTSTARTER_CORS_ORIGINS` environment variable to a comma-separated list of origins (include `null` if you open the dashboard straight from a file).
+- Position sizes other than 1x are modelled as a constant share of your account, adjusted every candle at no cost. A real position keeps a fixed size, so its leverage drifts as you win or lose.
+- In the walk-forward test, switching to a different setting between folds is free in the stitched curve, and each test window starts with whatever position its setting already held. With 5 folds this can hide about 1% at most (two fees per fold boundary at a 0.1% fee and 1x size).
+- The RSI strategy uses a simple average of gains and losses over the period, not Wilder's smoothing, so its values differ slightly from most charting sites.
+- The asset comparison cuts every coin to the dates they all share, and major coins move together; the dashboard shows their average correlation. Agreement across them is weaker evidence than agreement across unrelated markets.
+- Price data comes from Yahoo Finance through the unofficial `yfinance` library (or from an exchange through `ccxt`). It can change or break without notice, may contain gaps or zero-volume candles, and differs slightly from exchange prices. Yahoo's data is meant for personal use, so check its terms before redistributing it, and do not commit downloaded data to the repository.
+- The API allows requests from any origin by default, which is fine for local use. To restrict it, set the `QUANTSTARTER_CORS_ORIGINS` environment variable to a comma-separated list of origins (include `null` if you open the dashboard straight from a file). The API has no login, so keep it on `127.0.0.1` (the default); do not start it with `--host 0.0.0.0` or put it on a public server without adding authentication.
 
 ## Project layout
 
@@ -242,7 +247,7 @@ Tests need no database or internet. The tests for the C++ library are skipped if
 quantstarter/
 ├── README.md
 ├── CONTRIBUTING.md
-├── CHANGELOG.md
+├── Changelog.md
 ├── LICENSE
 ├── requirements.txt
 ├── requirements-dev.txt
@@ -256,6 +261,7 @@ quantstarter/
 ├── collector/
 │   ├── collect.py
 │   ├── collect_yahoo.py
+│   ├── candles.py          skips unfinished candles, shared insert statement
 │   ├── test_exchanges.py
 │   └── .env.example
 ├── engine/
@@ -267,8 +273,7 @@ quantstarter/
 │   ├── compare.py          the same strategy run across several assets
 │   ├── costs.py            cost stress test and break-even cost
 │   ├── fast.py             indicators: C++ if built, pandas otherwise
-│   ├── report.py           training vs unseen test report
-│   └── sweep.py
+│   └── report.py           training vs unseen test report
 ├── cpp/
 │   ├── indicators.cpp
 │   ├── build.py
@@ -285,7 +290,7 @@ quantstarter/
 
 Ideas that would help:
 
-- More strategies (Bollinger Bands, momentum, volatility filters)
+- More strategies (the six existing ones live in `engine/strategies.py`; a volume-based rule or a different volatility filter would be new)
 - Non-crypto assets, and exchange data for 4-hour candles with a longer history
 - Volatility-based position sizing, and a more realistic margin model (maintenance margin, changing funding rates)
 - Order-size-aware slippage (cost that grows with position size)

@@ -5,6 +5,8 @@ import mysql.connector
 import yfinance as yf
 from dotenv import load_dotenv
 
+from candles import UPSERT_CANDLE_SQL, is_closed
+
 load_dotenv()
 
 SOURCE = "yahoo"
@@ -54,17 +56,17 @@ def collect(ticker: str, timeframe: str, db) -> int:
         for idx, r in df.iterrows()
     ]
 
+    # Yahoo includes the candle that is still forming; its values are partial, so leave it for the next run
+    rows = [r for r in rows if is_closed(r[3], timeframe)]
+    if not rows:
+        print(f"{ticker}: no finished candles yet.")
+        return 0
+
     cur = db.cursor()
-    cur.executemany(
-        """INSERT IGNORE INTO candles
-           (exchange, symbol, timeframe, ts, open, high, low, close, volume)
-           VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-        rows,
-    )
+    cur.executemany(UPSERT_CANDLE_SQL, rows)
     db.commit()
-    added = cur.rowcount
     cur.close()
-    print(f"{ticker}: downloaded {len(rows)} candles, {added} new, stored as {symbol} ({timeframe}).")
+    print(f"{ticker}: saved {len(rows)} finished candles as {symbol} ({timeframe}); candles already stored are refreshed.")
     return len(rows)
 
 

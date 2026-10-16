@@ -43,22 +43,63 @@ def sharpe(returns: pd.Series, periods_per_year=HOURS_PER_YEAR) -> float:
 
 
 def sortino(returns: pd.Series, periods_per_year=HOURS_PER_YEAR) -> float:
-    """Like Sharpe, but only penalises downside volatility."""
-    downside = returns[returns < 0].std()
+    """Like Sharpe, but only penalises downside volatility.
+
+    Downside deviation is the root mean square of the losses over ALL candles (target return 0),
+    not the spread among the losing candles only.
+    """
+    values = returns.to_numpy(dtype=float)
+    if len(values) == 0:
+        return 0.0
+    downside = float(np.sqrt(np.mean(np.minimum(values, 0.0) ** 2)))
     if downside == 0 or np.isnan(downside):
         return 0.0
     return float(returns.mean() / downside * np.sqrt(periods_per_year))
 
 
+def trade_returns(df: pd.DataFrame) -> list:
+    """Net return of every trade: one unbroken stretch long or short, entry AND exit costs included.
+
+    The simulation charges a trade's exit cost on the candle after the trade, and a flip from long to
+    short pays for closing one trade and opening the next on the same candle. This splits that cost
+    so each trade carries its own entry and exit. A trade still open at the end has no exit cost yet.
+    Without the `cost` and `exposure` columns, only the costs inside the stretch are counted.
+    """
+    pos = df["position"].to_numpy(dtype=float)
+    ret = df["strategy_ret"].to_numpy(dtype=float)
+    n = len(pos)
+    if n == 0:
+        return []
+    has_costs = "cost" in df.columns and "exposure" in df.columns
+    if has_costs:
+        cost = df["cost"].to_numpy(dtype=float)
+        exposure = df["exposure"].to_numpy(dtype=float)
+
+    def closing_cost(i: int) -> float:
+        """Part of candle i's trading cost that closes the position held on candle i-1."""
+        if not has_costs or i <= 0 or i >= n or exposure[i - 1] == 0 or cost[i] == 0:
+            return 0.0
+        moved = abs(exposure[i] - exposure[i - 1])
+        return float(cost[i] * abs(exposure[i - 1]) / moved) if moved else 0.0
+
+    changes = np.flatnonzero(np.diff(pos) != 0) + 1
+    starts = np.concatenate(([0], changes))
+    ends = np.concatenate((changes, [n])) - 1          # inclusive
+    trades = []
+    for s, e in zip(starts, ends):
+        if pos[s] == 0:
+            continue
+        # the first candle also carries the cost of closing the previous trade; hand that back
+        growth = (1 + ret[s] + closing_cost(s)) * np.prod(1 + ret[s + 1:e + 1])
+        growth *= 1 - closing_cost(e + 1)
+        trades.append(float(growth - 1))
+    return trades
+
+
 def win_rate(df: pd.DataFrame) -> float:
-    """Share of trades that made money. A trade is one unbroken stretch long or short."""
-    position = df["position"]
-    stretch = (position != position.shift()).cumsum()   # a new number whenever the position changes
-    active = df[position != 0]
-    per_trade = active.groupby(stretch[active.index])["strategy_ret"].apply(
-        lambda r: (1 + r).prod() - 1
-    )
-    return float((per_trade > 0).mean()) if len(per_trade) else 0.0
+    """Share of trades that made money, after the fees on both entry and exit."""
+    trades = trade_returns(df)
+    return float(np.mean(np.array(trades) > 0)) if trades else 0.0
 
 
 def time_in_market(df: pd.DataFrame) -> float:

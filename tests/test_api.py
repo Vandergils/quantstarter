@@ -70,6 +70,13 @@ def test_datasets_are_listed(client):
 def test_position_size_calculator(client):
     r = client.get("/position-size", params={"balance": 1000, "entry": 60000, "stop": 58000})
     assert r.json()["units"] == pytest.approx(0.005)
+    assert r.json()["notional"] == pytest.approx(300) and r.json()["needs_leverage"] is False
+
+
+def test_position_size_warns_when_the_stop_is_so_tight_that_it_needs_leverage(client):
+    # risking 1% of 1000 = 10 with a stop only 10 away means 1 whole coin, worth 60000
+    r = client.get("/position-size", params={"balance": 1000, "entry": 60000, "stop": 59990}).json()
+    assert r["leverage"] == pytest.approx(60) and r["needs_leverage"] is True
 
 
 # ---------- backtest ----------

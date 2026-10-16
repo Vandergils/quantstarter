@@ -87,7 +87,7 @@ def run_walk_forward(data: pd.DataFrame, strategy: str, fee: float = 0.001, fold
                 "test": stats(slice_result(res, b, c), ppy),
             }
         )
-        pieces.append(res.iloc[b:c][["position", "market_ret", "strategy_ret", "trade"]])
+        pieces.append(res.iloc[b:c][["position", "market_ret", "strategy_ret", "trade", "exposure", "cost"]])
 
     # stitch the unseen windows into one out-of-sample curve
     stitched = pd.concat(pieces)

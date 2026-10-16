@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.5.2 - 2026-10-16
+
+Maintenance: fixes from an audit of v0.5.1, covering data collection, metrics, the C++ indicators, the asset comparison, and the README.
+
+### Fixed
+
+- **Collectors no longer store a candle that is still forming.** An unfinished candle used to be saved once and then kept forever with partial values. Candles already stored are now refreshed when you run a collector again, so re-running it repairs old data
+- **Sortino ratio** now uses the standard downside deviation (losses over all candles). Earlier values could be far too high, so Sortino numbers will change
+- **Win rate** now includes the fee on exit (and splits the cost of a long-to-short flip between the two trades), so trades that only looked profitable before fees on exit are no longer counted as wins
+- **Docker:** MySQL is pinned to 8.4 and its port is only open to your own computer; `db/schema.sql` ends with a semicolon
+- **C++ indicators** now treat a missing price like pandas does (a window with a gap gives NaN). Before, one missing price made the C++ moving average NaN for the rest of the series
+- **Position size calculator** shows what the position is worth and the leverage it implies, and warns when a tight stop would need more than your balance
+- **Asset comparison** now cuts every coin to the dates they all share, so the unseen part covers the same period for each, and reports the average correlation between the coins (`common_window=false` restores the old behaviour)
+- **Dashboard** escapes ticker and exchange names before showing them
+- **CI** reports whether the C++ indicators were loaded, runs the tests a second time on the pandas indicators, and uses read-only permissions
+- Docs: the getting-started guide now lives in `docs/` where the README links to it; the pull request template is in `.github/`; the README explains where a trade is assumed to fill and lists the timeframes the collector provides. New known limits: constant-share leverage, free setting switches between walk-forward folds, and the simple-average RSI
+- Docs: the README no longer says zero funding flatters shorts (funding can help or hurt), explains that the unseen period stops being unseen if you keep tuning against it, notes the limits of the Yahoo data, warns against exposing the API without authentication, and the Contributing ideas list no longer mentions strategies that already exist
+
 ## 0.5.1 - 2026-10-15
 
 Maintenance: a safer install, more tests, and friendlier contributing.

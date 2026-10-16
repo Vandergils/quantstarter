@@ -4,6 +4,8 @@ import ccxt
 import mysql.connector
 from dotenv import load_dotenv
 
+from candles import UPSERT_CANDLE_SQL, is_closed
+
 load_dotenv()
 
 EXCHANGE = "bybit"
@@ -33,15 +35,12 @@ def collect():
         if not candles:
             break
 
-        rows = [(EXCHANGE, SYMBOL, TIMEFRAME, *c) for c in candles]
-        cur.executemany(
-            """INSERT IGNORE INTO candles
-               (exchange, symbol, timeframe, ts, open, high, low, close, volume)
-               VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
-            rows,
-        )
-        db.commit()
-        total += len(rows)
+        # the last candle is usually still forming and has partial values, so only keep finished ones
+        rows = [(EXCHANGE, SYMBOL, TIMEFRAME, *c) for c in candles if is_closed(c[0], TIMEFRAME)]
+        if rows:
+            cur.executemany(UPSERT_CANDLE_SQL, rows)
+            db.commit()
+            total += len(rows)
 
         since = candles[-1][0] + 1
         print(f"Saved {total} candles...")

@@ -416,6 +416,8 @@
 
   const $ = (id) => document.getElementById(id);
   const pct = (x) => (x * 100).toFixed(2) + "%";
+  // names come from the database (any ticker you collected), so escape them before putting them in HTML
+  const esc = (v) => String(v).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
   let specs = {};
   let chart = null;
   let lastBest = null;
@@ -799,7 +801,9 @@
         entry: $("entry").value,
         stop: $("stop").value,
       });
-      $("calcOut").textContent = `Buy about ${data.units.toFixed(6)} units.`;
+      $("calcOut").textContent = `Buy about ${data.units.toFixed(6)} units` +
+        (data.notional !== undefined ? ` (worth ${data.notional.toFixed(2)}, which is ${data.leverage.toFixed(2)}x your balance).` : ".") +
+        (data.needs_leverage ? " That is more than your balance, so it would need leverage or borrowed money. Use a wider stop or a smaller risk." : "");
     } catch (e) {
       showError("Position size: " + e.message);
     }
@@ -974,7 +978,7 @@
         $("datasetHint").textContent = "Run a collector first (see the README).";
         return;
       }
-      $("dataset").innerHTML = datasets.map((d, i) => `<option value="${i}">${d.symbol} ${d.timeframe} (${d.exchange})</option>`).join("");
+      $("dataset").innerHTML = datasets.map((d, i) => `<option value="${i}">${esc(d.symbol)} ${esc(d.timeframe)} (${esc(d.exchange)})</option>`).join("");
       const hidden = all.length - datasets.length;
       showDatasetHint(hidden);
       $("dataset").addEventListener("change", () => {
@@ -990,7 +994,7 @@
   function renderCmp(d) {
     const s = d.summary, n = s.assets;
     const rows = d.assets.map((a) =>
-      `<tr><td>${a.asset}</td>
+      `<tr><td>${esc(a.asset)}</td>
          <td>${a.candles.toLocaleString()}</td>
          <td class="${toneRet(a.train.total_return)}">${pct(a.train.total_return)}</td>
          <td>${pct(a.train.buy_hold_return)}</td>
@@ -1014,7 +1018,7 @@
       lesson = `Mixed: it made money on ${s.profitable} of ${n} assets and beat holding on ${s.beat_hold}. An idea that works on some coins and not others is hard to rely on.`;
     }
     const skipped = d.skipped.length
-      ? `<p class="hint">Skipped for too little data: ${d.skipped.map((x) => `${x.asset} (${x.reason})`).join(", ")}.</p>` : "";
+      ? `<p class="hint">Skipped for too little data: ${d.skipped.map((x) => `${esc(x.asset)} (${esc(x.reason)})`).join(", ")}.</p>` : "";
 
     $("cmpBox").innerHTML =
       `<p class="verdict">With the same settings (${fmtParams(d.params)}), it made money on <span class="${s.profitable > n / 2 ? "good" : "bad"}">${s.profitable}</span> of ${n} assets in the unseen period and beat holding on <span class="${s.beat_hold > n / 2 ? "good" : "bad"}">${s.beat_hold}</span>.</p>
@@ -1023,7 +1027,7 @@
          <thead><tr><th>Asset</th><th>Candles</th><th>Train return</th><th>Train hold</th><th>Unseen return</th><th>Unseen hold</th><th>Unseen Sharpe</th><th>Trades</th><th>In market</th></tr></thead>
          <tbody>${rows}</tbody></table></div>
        ${skipped}
-       <p class="hint">All assets are shown at the ${TF_LABEL[d.timeframe] || d.timeframe} timeframe. The same settings run on every asset, with nothing tuned per coin. The unseen part is the newest ${Math.round(d.holdout * 100)}% of each series. Average unseen Sharpe: ${s.avg_test_sharpe.toFixed(2)}. Crypto coins tend to move together, so agreement across them is weaker evidence than agreement across unrelated markets.</p>`;
+       <p class="hint">All assets are shown at the ${TF_LABEL[d.timeframe] || d.timeframe} timeframe. The same settings run on every asset, with nothing tuned per coin. ${d.common_window ? `All assets are compared over the same period (${d.window.start} to ${d.window.end}), and the unseen part is its newest ${Math.round(d.holdout * 100)}%.` : `The unseen part is the newest ${Math.round(d.holdout * 100)}% of each series, so its dates differ between assets.`} Average unseen Sharpe: ${s.avg_test_sharpe.toFixed(2)}.${s.avg_correlation != null ? ` Average correlation between these assets: ${s.avg_correlation.toFixed(2)}.` : ""} Crypto coins tend to move together, so agreement across them is weaker evidence than agreement across unrelated markets.</p>`;
     addExport("compare", "cmpBox", d);
     $("cmpPanel").hidden = false;
   }

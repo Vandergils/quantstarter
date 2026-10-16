@@ -13,4 +13,4 @@ CREATE TABLE IF NOT EXISTS candles (
     close DOUBLE NOT NULL,
     volume DOUBLE NOT NULL,
     UNIQUE KEY uq_candle (exchange, symbol, timeframe, ts)
-)
+);

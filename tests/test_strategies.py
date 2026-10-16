@@ -111,3 +111,12 @@ def test_trend_calm_stands_aside_during_a_volatility_spike():
     short_signal = short_trend_calm(df, period=50, vol_window=20, vol_limit=1.5)
     assert long_signal.iloc[290] == 1                                    # calm uptrend: hold
     assert long_signal.iloc[315] == 0 and short_signal.iloc[315] == 0    # spike: flat, neither long nor short
+
+
+def test_entry_is_priced_at_the_close_of_the_signal_candle():
+    # the signal is known at the close of candle 1 (price 100); candle 2 closes at 110.
+    # The position earns that whole move, so the trade is assumed to fill at 100, the signal candle's close.
+    df = pd.DataFrame({"close": [100, 100, 110, 110]}, index=pd.date_range("2024-01-01", periods=4, freq="h"))
+    signal = pd.Series([0, 1, 1, 1], index=df.index)
+    result = run_signal(df, signal, fee=0)
+    assert abs(result["equity"].iloc[-1] - 1.10) < 1e-12

@@ -9,6 +9,9 @@ def run_signal(df: pd.DataFrame, signal: pd.Series, fee: float = 0.001, short_co
     """Turn a signal into equity curves. Shared by every strategy.
 
     The signal is +1 (hold the coin), 0 (cash) or -1 (short: profit when the price falls).
+    A signal is computed from the close of a candle and the trade is assumed to fill at that same
+    close, so the position earns the NEXT candle's move. Real orders fill a little later and a little
+    worse; the slippage setting (added to `fee` by the API) stands in for that.
     `size` is how much of the account is exposed: 1.0 is all of it, 0.5 is half, 2.0 is twice the
     account (leverage). `fee` is charged on everything traded, so a bigger size pays more, and
     flipping from long to short pays it twice.
@@ -24,6 +27,8 @@ def run_signal(df: pd.DataFrame, signal: pd.Series, fee: float = 0.001, short_co
     df["market_ret"] = df["close"].pct_change().fillna(0)
     df["trade"] = df["position"].diff().abs().fillna(0)      # orders placed: a flip counts as two
     turnover = exposure.diff().abs().fillna(0)               # how much was traded, as a share of the account
+    df["exposure"] = exposure                                # kept so metrics can split costs between trades
+    df["cost"] = turnover * fee
     ret = (
         exposure * df["market_ret"]
         - turnover * fee
@@ -191,7 +196,7 @@ STRATEGIES = {
     },
     "rsi": {
         "label": "RSI mean reversion",
-        "description": "Bet on bounces. Buy after a sharp drop (low RSI), sell once the price has recovered.",
+        "description": "Bet on bounces. Buy after a sharp drop (low RSI), sell once the price has recovered. This RSI uses a simple average of gains and losses, so its values differ slightly from charting sites that smooth them (Wilder).",
         "func": sig_rsi,
         "short_func": short_rsi,
         "params": [
